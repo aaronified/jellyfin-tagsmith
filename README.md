@@ -83,6 +83,10 @@ Dashboard → Tagsmith (or Plugins → Tagsmith) to configure, then either hit *
 library now** on that page or wait for the nightly 04:00 run. Progress appears under
 Dashboard → Scheduled Tasks. Turn on dry run first to see what would change in the logs.
 
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ## Known gaps
 
 - `original_lang=` needs an external provider (v1.1) — Jellyfin doesn't store it.
