@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Tagsmith</title>
+</head>
+<body>
+<div id="TagsmithConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <form id="TagsmithConfigForm">
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Tag namespaces</h2>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="Separator" label="Separator" />
+                        <div class="fieldDescription">Character between namespace and value, e.g. <code>=</code>.</div>
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="EnableOrigin" />
+                        <span>Tag production countries</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="OriginNamespace" label="Origin namespace" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="EnableLanguage" />
+                        <span>Tag audio languages</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="LanguageNamespace" label="Language namespace" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="EnableYear" />
+                        <span>Tag first release year</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="YearNamespace" label="Year namespace" />
+                    </div>
+                </div>
+
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Behaviour</h2>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="RemoveObsoleteTags" />
+                        <span>Remove managed tags that are no longer produced</span>
+                    </label>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="DryRun" />
+                        <span>Dry run (log changes only)</span>
+                    </label>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ForceFullRescan" />
+                        <span>Reprocess every item on the next run</span>
+                    </label>
+                </div>
+
+                <button is="emby-button" type="submit" class="raised button-submit block">
+                    <span>Save</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84';
+            var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'YearNamespace'];
+            var boolFields = ['EnableOrigin', 'EnableLanguage', 'EnableYear', 'RemoveObsoleteTags', 'DryRun', 'ForceFullRescan'];
+
+            document.querySelector('#TagsmithConfigPage').addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    textFields.forEach(function (id) {
+                        document.querySelector('#' + id).value = config[id] || '';
+                    });
+                    boolFields.forEach(function (id) {
+                        document.querySelector('#' + id).checked = !!config[id];
+                    });
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+            document.querySelector('#TagsmithConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    textFields.forEach(function (id) {
+                        config[id] = document.querySelector('#' + id).value;
+                    });
+                    boolFields.forEach(function (id) {
+                        config[id] = document.querySelector('#' + id).checked;
+                    });
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+                return false;
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
