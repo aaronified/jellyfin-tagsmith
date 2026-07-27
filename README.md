@@ -37,6 +37,11 @@ Jellyfin removed tags from global search in 10.10 for performance reasons. Filte
 works: click a tag on any item page, use `/web/#/list.html?type=tag&tag=origin%3Dindia`, or
 query `GET /Items?Recursive=true&Tags=origin%3Dindia`. There is no wildcard matching.
 
+Some clients — Fladder, for one — neither show nor filter on tags at all. The planned fix
+is a collections projection: one browsable library per namespace, built from the tags. See
+[docs/collections.md](docs/collections.md). It requires Jellyfin to have write access to
+its own config directory, since that is where collection metadata lives.
+
 ## Layout
 
 ```
