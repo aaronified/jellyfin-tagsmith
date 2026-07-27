@@ -55,7 +55,10 @@ directory. Full detail in [docs/collections.md](docs/collections.md).
 Optional, and not shipped with the plugin. A starter set — flags, native-script language
 cards, decade cards — lives in [assets/thumbnails](assets/thumbnails). Copy the ones you
 want into `<config>/tagsmith/thumbnails/<namespace>/`, named after the tag value; case and
-separators do not matter. A poster you set by hand in the library UI is never overwritten.
+separators do not matter.
+
+It works both ways: set a poster by hand on a collection and Tagsmith copies it into that
+folder as the stored artwork for the value, so it survives the collection being rebuilt.
 
 ## Layout
 
@@ -126,7 +129,7 @@ dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o artifacts
 ```
 
 Copy `artifacts/Jellyfin.Plugin.Tagsmith.dll` into
-`<jellyfin-config>/plugins/Tagsmith_0.0.3/` and restart the server.
+`<jellyfin-config>/plugins/Tagsmith_0.0.4/` and restart the server.
 
 The `Jellyfin.Controller` package version in the csproj must match the server version,
 or the plugin loads as `NotSupported`.

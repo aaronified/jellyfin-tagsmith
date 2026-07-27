@@ -158,7 +158,7 @@ public class CollectionProjector
                 await SyncMembersAsync(boxSet, memberIds, cancellationToken).ConfigureAwait(false);
             }
 
-            ApplyArtwork(record!, boxSet, tagNamespace, thumbnails);
+            SyncArtwork(record!, boxSet, tagNamespace, thumbnails);
         }
 
         await RemoveEmptyAsync(kind, wanted.Keys, configuration, cancellationToken).ConfigureAwait(false);
@@ -234,12 +234,23 @@ public class CollectionProjector
     }
 
     /// <summary>
-    /// Applies user artwork, but only when the collection has none or when the image
-    /// currently on it is one Tagsmith applied and the source file has since changed.
-    /// A poster the user picked by hand must survive the nightly run.
+    /// Keeps the collection's poster and the thumbnails folder in step, in both
+    /// directions.
     /// </summary>
-    private void ApplyArtwork(ManagedCollection record, BaseItem boxSet, string tagNamespace, ThumbnailLocator thumbnails)
+    /// <remarks>
+    /// A poster set by hand in the library UI is captured back into
+    /// <c>&lt;config&gt;/tagsmith/thumbnails/</c> and becomes the stored artwork for that
+    /// value, so it survives the collection being rebuilt and can be backed up or edited
+    /// like any other file. Otherwise the file in that folder is applied to the
+    /// collection.
+    /// </remarks>
+    private void SyncArtwork(ManagedCollection record, BaseItem boxSet, string tagNamespace, ThumbnailLocator thumbnails)
     {
+        if (CaptureManualPoster(record, boxSet, tagNamespace, thumbnails))
+        {
+            return;
+        }
+
         var file = thumbnails.Find(tagNamespace, record.Value);
         if (file is null)
         {
@@ -248,14 +259,6 @@ public class CollectionProjector
 
         var hash = ThumbnailLocator.Hash(file);
         if (string.Equals(record.ImageHash, hash, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var hasImage = boxSet.HasImage(ImageType.Primary, 0);
-        var oursIsCurrent = record.ImageHash.Length > 0;
-
-        if (hasImage && !oursIsCurrent)
         {
             return;
         }
@@ -274,6 +277,47 @@ public class CollectionProjector
         catch (IOException ex)
         {
             _logger.LogWarning(ex, "Tagsmith: could not apply artwork {File}", file);
+        }
+    }
+
+    /// <summary>
+    /// If the collection carries a poster Tagsmith did not put there, copy it into the
+    /// thumbnails folder and adopt it. Returns true when a capture happened.
+    /// </summary>
+    private bool CaptureManualPoster(
+        ManagedCollection record,
+        BaseItem boxSet,
+        string tagNamespace,
+        ThumbnailLocator thumbnails)
+    {
+        var image = boxSet.GetImageInfo(ImageType.Primary, 0);
+        if (image?.Path is null || !File.Exists(image.Path))
+        {
+            return false;
+        }
+
+        var currentHash = ThumbnailLocator.Hash(image.Path);
+        if (string.Equals(record.ImageHash, currentHash, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            var destination = thumbnails.Store(tagNamespace, record.Value, image.Path);
+            record.ImageHash = currentHash;
+
+            _logger.LogInformation(
+                "Tagsmith: adopted the poster on {Name} into {File}",
+                boxSet.Name,
+                destination);
+
+            return true;
+        }
+        catch (IOException ex)
+        {
+            _logger.LogWarning(ex, "Tagsmith: could not capture the poster on {Name}", boxSet.Name);
+            return false;
         }
     }
 

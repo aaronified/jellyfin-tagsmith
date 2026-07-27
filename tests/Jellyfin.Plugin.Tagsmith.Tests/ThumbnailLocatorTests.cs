@@ -75,6 +75,44 @@ public class ThumbnailLocatorTests : IDisposable
         Assert.NotEqual(before, ThumbnailLocator.Hash(file));
     }
 
+    [Fact]
+    public void Store_adopts_a_manual_poster_into_the_folder()
+    {
+        var source = Path.Combine(_root, "manual.jpg");
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(source, "hand-picked poster");
+
+        var written = Locator.Store("origin", "india", source);
+
+        Assert.EndsWith(Path.Combine("origin", "india.jpg"), written, StringComparison.Ordinal);
+        Assert.Equal("hand-picked poster", File.ReadAllText(written));
+        Assert.NotNull(Locator.Find("origin", "india"));
+    }
+
+    [Fact]
+    public void Store_replaces_existing_artwork_whatever_its_extension()
+    {
+        Given("origin", "India.PNG");
+        var source = Path.Combine(_root, "manual.jpg");
+        File.WriteAllText(source, "replacement");
+
+        Locator.Store("origin", "india", source);
+
+        var directory = Path.Combine(_root, "tagsmith", "thumbnails", "origin");
+        Assert.Single(Directory.GetFiles(directory));
+        Assert.Equal("replacement", File.ReadAllText(Locator.Find("origin", "india")!));
+    }
+
+    [Fact]
+    public void Store_falls_back_to_png_for_an_unknown_extension()
+    {
+        var source = Path.Combine(_root, "poster.bin");
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(source, "bytes");
+
+        Assert.EndsWith(".png", Locator.Store("year", "1950s", source), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("a.png", "image/png")]
     [InlineData("a.jpg", "image/jpeg")]

@@ -35,9 +35,9 @@ public class ManagedCollection
     public string Id { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets a hash of the image file Tagsmith last applied, or empty if it applied
-    /// none. Used to leave a hand-picked poster alone while still following changes to the
-    /// source file.
+    /// Gets or sets a hash of the image last synced in either direction — folder to
+    /// collection, or an adopted poster back into the folder — so a run with nothing
+    /// changed writes nothing.
     /// </summary>
     public string ImageHash { get; set; } = string.Empty;
 }

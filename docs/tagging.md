@@ -98,25 +98,30 @@ visible and editable on the settings page: **delete a line to make Tagsmith forg
 tags and stop managing them**, which is how you keep a set of tags after turning a
 namespace off.
 
-## Hand-added tags
+## Ownership is by namespace
 
-Add `origin=india` to a film by hand and it stays. Tagsmith records the exact set of tags
-it wrote to each item, in the item's provider ids under the key `Tagsmith`, and prunes only
-those. A tag it never wrote is not its to remove.
+Tagsmith owns a **prefix**, not a list of individual tags. Everything under `origin=`
+belongs to it regardless of who typed it; everything outside is untouched, permanently.
 
-This matters because the projection groups on the tags actually present, so a hand-added
-tag puts the film in the India collection on the next run — which would be useless if the
-same run deleted the tag.
+The consequence, which is deliberate: a tag you add by hand inside a managed namespace is
+business as usual. It shows up in the collections projection like any other, it gets
+rewritten when an alias changes the value globally, and it is removed when the generated
+set for that item no longer contains it. If your metadata says Japan and you hand-add
+`origin=india`, the next run replaces it.
 
-Items tagged before this existed have no record, so the first run after upgrading falls
-back to pruning by prefix. From then on the record exists and manual additions are safe.
+To keep a tag Tagsmith will never touch, put it outside the managed prefixes — any plain
+tag, or a namespace Tagsmith is not configured to use.
+
+The alternative — recording per item which tags Tagsmith wrote and pruning only those —
+was tried and rejected: it makes two kinds of tag that look identical but behave
+differently, which is worse to reason about than one rule applied consistently.
 
 ## Guarantees
 
 - A changed value rewrites its tag; it never adds a second one.
 - Renaming a namespace, changing the separator, or disabling a namespace still cleans up.
 - Tags outside the managed prefixes are never read, modified, or deleted.
-- A tag added by hand is never deleted, even inside a managed namespace.
+- Nothing is deleted except tags carrying a prefix Tagsmith is using or has used before.
 - Dry run writes nothing — changes go to the log only.
 - Re-running with unchanged settings is a no-op; the item is only saved when the computed
   tag set actually differs.

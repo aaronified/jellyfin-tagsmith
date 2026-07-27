@@ -63,6 +63,39 @@ public class ThumbnailLocator
     }
 
     /// <summary>
+    /// Copies an image into the thumbnails folder as the stored artwork for a value,
+    /// replacing whatever was there. Used to adopt a poster the user set by hand in the
+    /// library UI, so it survives the collection being rebuilt.
+    /// </summary>
+    /// <returns>The path written.</returns>
+    public string Store(string tagNamespace, string value, string source)
+    {
+        var directory = Path.Combine(_root, tagNamespace);
+        Directory.CreateDirectory(directory);
+
+        // Replace any existing artwork for this value, whatever extension it used, so one
+        // value never ends up with two competing files.
+        foreach (var stale in Directory.EnumerateFiles(directory))
+        {
+            if (_extensions.Contains(Path.GetExtension(stale), StringComparer.OrdinalIgnoreCase)
+                && string.Equals(TagNormalizer.Slug(Path.GetFileNameWithoutExtension(stale)), TagNormalizer.Slug(value), StringComparison.Ordinal))
+            {
+                File.Delete(stale);
+            }
+        }
+
+        var extension = Path.GetExtension(source);
+        if (!_extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        {
+            extension = ".png";
+        }
+
+        var destination = Path.Combine(directory, TagNormalizer.Slug(value) + extension.ToLowerInvariant());
+        File.Copy(source, destination, true);
+        return destination;
+    }
+
+    /// <summary>
     /// Hashes a file so Tagsmith can tell its own artwork from a poster the user picked by
     /// hand, and notice when the source file changes.
     /// </summary>

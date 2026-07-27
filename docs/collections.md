@@ -1,6 +1,6 @@
 # Collections projection
 
-**Status: implemented in 0.0.3, off by default. The rendering of a plugin-created
+**Status: implemented in 0.0.3, revised in 0.0.4, off by default. The rendering of a plugin-created
 collections library has not yet been confirmed on a live server — enable one namespace
 first.**
 
@@ -19,9 +19,8 @@ tags are untouched.
 
 Grouping reads the tags actually on the item, not what a provider would compute, so a tag
 added by hand in the Jellyfin UI lands in its collection on the next run exactly like a
-generated one. For that to be useful the tag also has to survive, which is why the tag
-writer records what it wrote — see *Hand-added tags* in
-[tagging.md](tagging.md#hand-added-tags).
+generated one — and is maintained the same way afterwards. See *Ownership is by namespace*
+in [tagging.md](tagging.md).
 
 ```
 tags  ->  group items by tag  ->  reconcile collections  ->  reconcile libraries
@@ -112,16 +111,19 @@ The filename stem is matched against the tag value after running both through
 `india.png`, `India.PNG`, `United States.png` and `united-states.png` all resolve. Accepted
 extensions: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`.
 
-### Precedence
+### The folder is the source of truth, in both directions
 
-1. A file in the thumbnails folder.
-2. An image set by hand in the Jellyfin UI.
-3. Nothing — Jellyfin's member collage.
+Set a poster by hand on a collection in the library UI and Tagsmith **adopts** it: the
+image is copied into `<config>/tagsmith/thumbnails/<namespace>/` as the stored artwork for
+that value, replacing whatever was there. From then on it is an ordinary file you can back
+up, edit or delete, and it survives the collection being rebuilt or the library being torn
+down and recreated.
 
-Rule: **Tagsmith writes an image only when the collection has none, or when the current
-image is one Tagsmith itself wrote and the source file has changed.** It records a hash of
-what it applied. Without this the scheduled task would silently overwrite every poster the
-user hand-picked — the same failure shape as resurrecting a deleted library.
+Otherwise the file in the folder is applied to the collection.
+
+Each direction is guarded by a hash of the image last synced, so a run with nothing changed
+writes nothing. One value never accumulates two files: adopting `india.jpg` removes an
+existing `india.png`.
 
 ## Reconciliation
 
