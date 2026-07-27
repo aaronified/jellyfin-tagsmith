@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version, e.g. 1.0.0.1"
+        description: "Version, e.g. 1.0.0"
         required: true
       changelog:
         description: "Changelog line"
@@ -24,23 +24,22 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
+      # Jellyfin compares versions with System.Version, where 1.0.0 != 1.0.0.0.
+      # Keep the manifest on 3-part versions; .NET still needs 4 parts internally.
       - name: Resolve version
         id: v
         run: |
           v="${{ inputs.version }}"
-          case "$v" in
-            *.*.*.*) ;;
-            *) v="$v.0" ;;
-          esac
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "assembly_version=$v.0" >> "$GITHUB_OUTPUT"
           echo "zip=tagsmith_$v.zip" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: |
           dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o publish \
             -p:Version=${{ steps.v.outputs.version }} \
-            -p:AssemblyVersion=${{ steps.v.outputs.version }} \
-            -p:FileVersion=${{ steps.v.outputs.version }}
+            -p:AssemblyVersion=${{ steps.v.outputs.assembly_version }} \
+            -p:FileVersion=${{ steps.v.outputs.assembly_version }}
 
       - name: Package
         run: |
