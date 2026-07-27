@@ -57,12 +57,63 @@ Visibility caveats, none of them plugin-controlled:
 - Users can hide libraries from their own home screen.
 - Clients cache the library list; a refresh or re-login may be needed.
 
+## Granularity
+
+The projection is not obliged to mirror tag granularity. `year=1954` stays per-year as a
+tag, because that precision is what makes filtering useful, but the **year projection
+groups by decade** — `1950s`, ten tiles instead of a hundred.
+
+Other namespaces project one collection per value.
+
 ## Configuration
 
 Per namespace: **generate collections** on or off. Plus one global **remove collections
 when disabled**, default off.
 
-`year` defaults to off — one collection per year is a hundred tiles nobody asked for.
+`year` defaults to off even at decade granularity.
+
+## Images
+
+One image per collection. Jellyfin's `Primary` and `Thumb` are single-slot, and while
+`Backdrop` accepts several, the UI shows only the first — there is no per-item slideshow.
+Animated GIFs are accepted but the server re-encodes on resize, so treat them as static.
+
+Without an image, tiles fall back to a collage of member posters, so this is polish rather
+than a requirement.
+
+### Artwork is not bundled
+
+The plugin ships no images. A starter set lives in `assets/thumbnails/<namespace>/` in this
+repository — flat flags with a gradient and a label for `origin`, native-script name cards
+for `lang`, decade cards for `year` — generated at build time so no fonts or drawing
+libraries ever enter the plugin. Users download the set they want, or make their own.
+
+This keeps the installable plugin small, which matters when the update-from-dashboard loop
+is the main way it gets tested.
+
+### Where they go
+
+```
+<config>/tagsmith/thumbnails/origin/india.png
+<config>/tagsmith/thumbnails/lang/bengali.png
+<config>/tagsmith/thumbnails/year/1950s.png
+```
+
+The filename stem is matched against the tag value after running both through
+`TagNormalizer.Slug`. That makes matching case-insensitive and forgiving of separators, so
+`india.png`, `India.PNG`, `United States.png` and `united-states.png` all resolve. Accepted
+extensions: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`.
+
+### Precedence
+
+1. A file in the thumbnails folder.
+2. An image set by hand in the Jellyfin UI.
+3. Nothing — Jellyfin's member collage.
+
+Rule: **Tagsmith writes an image only when the collection has none, or when the current
+image is one Tagsmith itself wrote and the source file has changed.** It records a hash of
+what it applied. Without this the scheduled task would silently overwrite every poster the
+user hand-picked — the same failure shape as resurrecting a deleted library.
 
 ## Reconciliation
 
