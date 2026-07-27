@@ -21,11 +21,21 @@ Target server: **Jellyfin 10.11.11** (net9.0).
 Values are slugified: lowercase, diacritics stripped, non-alphanumerics collapsed to `_`.
 Tags outside the configured namespaces are never touched.
 
+Country names are canonicalised, so `United States of America`, `USA`, `Estados Unidos`
+and `美国` all become `origin=united_states` — one tag, not four. Changing a value rewrites
+the existing tag rather than adding another. Full detail in [docs/tagging.md](docs/tagging.md).
+
 ## Status
 
 v1.0 (this scaffold) covers only metadata Jellyfin already has: production countries,
 audio languages and first release year. See [docs/plan.md](docs/plan.md) for the roadmap
 (v1.1 external providers, v1.2 awards, v1.3 curated lists).
+
+## Finding tagged items
+
+Jellyfin removed tags from global search in 10.10 for performance reasons. Filtering still
+works: click a tag on any item page, use `/web/#/list.html?type=tag&tag=origin%3Dindia`, or
+query `GET /Items?Recursive=true&Tags=origin%3Dindia`. There is no wildcard matching.
 
 ## Layout
 
@@ -34,20 +44,39 @@ Jellyfin.Plugin.Tagsmith/
   Plugin.cs                      plugin metadata + config page registration
   PluginServiceRegistrator.cs    DI registration — add new providers here
   Configuration/                 settings class + dashboard config page
+  Data/countries.json.gz         generated CLDR country dictionary
   Tagging/
     ITagProvider.cs              the extension point
     TagNormalizer.cs             value slugification
+    TagAliasMap.cs               user rewrite rules
+    CountryAliasCatalog.cs       country name canonicalisation
     TagSynchronizer.cs           merge/prune logic, writes via ILibraryManager
   Providers/
     CoreMetadataTagProvider.cs   v1.0 provider, no network
   ScheduledTasks/
     TagSyncTask.cs               full-library pass
+scripts/                         CLDR generator, manifest updater
+tests/                           xunit suite
 ```
 
 ## Adding a provider
 
 Implement `ITagProvider`, declare the namespaces it owns, and register it in
 `PluginServiceRegistrator`. `TagSynchronizer` handles merging and pruning.
+
+## Development
+
+```bash
+dotnet build Jellyfin.Plugin.Tagsmith -c Release
+dotnet test tests/Jellyfin.Plugin.Tagsmith.Tests
+
+npm --prefix scripts install          # regenerate the country dictionary
+node scripts/generate-countries.mjs
+```
+
+Claude agents in `.claude/agents/` cover the routine: `test` (haiku) after every change,
+`validate` (opus) before a release, `commit-message` and `release-notes` (sonnet) from the
+diffs. See [CLAUDE.md](CLAUDE.md).
 
 ## Install and update
 

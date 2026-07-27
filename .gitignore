@@ -7,3 +7,4 @@ artifacts/
 .idea/
 .vscode/
 *.nupkg
+node_modules/

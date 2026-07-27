@@ -34,23 +34,35 @@ public class TagSynchronizer
     public async Task<bool> SyncAsync(BaseItem item, CancellationToken cancellationToken)
     {
         var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var aliases = TagAliasMap.Parse(configuration.Aliases);
 
         var desired = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var managedPrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var activePrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var provider in _providers)
         {
             foreach (var ns in provider.Namespaces(configuration))
             {
-                managedPrefixes.Add(ns + configuration.Separator);
+                activePrefixes.Add(ns + configuration.Separator);
             }
 
             foreach (var tag in await provider.GetTagsAsync(item, configuration, cancellationToken)
                          .ConfigureAwait(false))
             {
-                desired.Add(tag);
+                var mapped = aliases.Apply(tag, configuration.Separator);
+                if (mapped is not null)
+                {
+                    desired.Add(mapped);
+                }
             }
         }
+
+        RememberPrefixes(configuration, activePrefixes);
+
+        // Prune against every prefix ever written, not just the active ones, so renaming
+        // a namespace or disabling one still cleans up the tags it left behind.
+        var managedPrefixes = new HashSet<string>(configuration.KnownPrefixes, StringComparer.OrdinalIgnoreCase);
+        managedPrefixes.UnionWith(activePrefixes);
 
         var retained = item.Tags.Where(tag =>
             !configuration.RemoveObsoleteTags || !IsManaged(tag, managedPrefixes));
@@ -86,6 +98,28 @@ public class TagSynchronizer
 
         _logger.LogDebug("Updated tags on {Item}: {Tags}", item.Name, string.Join(", ", updated));
         return true;
+    }
+
+    /// <summary>
+    /// Records any newly seen prefix in configuration so it stays prunable after the
+    /// namespace or separator that produced it changes.
+    /// </summary>
+    private void RememberPrefixes(PluginConfiguration configuration, IEnumerable<string> activePrefixes)
+    {
+        var known = new HashSet<string>(configuration.KnownPrefixes, StringComparer.OrdinalIgnoreCase);
+        var before = known.Count;
+        known.UnionWith(activePrefixes);
+
+        if (known.Count == before)
+        {
+            return;
+        }
+
+        configuration.KnownPrefixes = known.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray();
+        Plugin.Instance?.SaveConfiguration();
+        _logger.LogInformation(
+            "Tagsmith now manages prefixes: {Prefixes}",
+            string.Join(", ", configuration.KnownPrefixes));
     }
 
     private static bool IsManaged(string tag, HashSet<string> managedPrefixes) =>

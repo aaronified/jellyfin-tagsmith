@@ -66,7 +66,13 @@ public class CoreMetadataTagProvider : ITagProvider
         {
             foreach (var country in item.ProductionLocations)
             {
-                Add(tags, configuration.OriginNamespace, configuration.Separator, country);
+                // Canonicalise first, so the same country spelled differently across
+                // metadata sources and languages collapses to one tag.
+                var canonical = configuration.CanonicaliseCountries
+                    ? CountryAliasCatalog.Resolve(country)
+                    : country;
+
+                Add(tags, configuration.OriginNamespace, configuration.Separator, canonical);
             }
         }
 

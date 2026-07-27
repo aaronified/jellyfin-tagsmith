@@ -25,6 +25,17 @@
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="OriginNamespace" label="Origin namespace" />
                     </div>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="CanonicaliseCountries" />
+                        <span>Canonicalise country names</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Folds every spelling of a country — any language, ISO code, or official
+                        long name — onto one value, so <code>USA</code> and
+                        <code>United States of America</code> both tag as
+                        <code>united_states</code>. Non-ISO values such as Soviet Union are left
+                        as they are.
+                    </div>
 
                     <label class="checkboxContainer">
                         <input is="emby-checkbox" type="checkbox" id="EnableLanguage" />
@@ -58,6 +69,34 @@
 
                 </div>
 
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Aliases</h2>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="Aliases" rows="6"
+                                  label="Rewrite rules, one per line"></textarea>
+                        <div class="fieldDescription">
+                            <code>origin:united_states =&gt; usa</code> rewrites within one
+                            namespace, <code>bengali =&gt; bangla</code> applies everywhere, and
+                            an empty replacement drops the tag. Lines starting with
+                            <code>#</code> are comments.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Managed prefixes</h2>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="KnownPrefixes" rows="4"
+                                  label="Prefixes Tagsmith owns, one per line"></textarea>
+                        <div class="fieldDescription">
+                            Maintained automatically. Every prefix listed here is pruned and
+                            rewritten on each run, which is how renaming a namespace or turning
+                            one off still cleans up the old tags. Remove a line to make Tagsmith
+                            forget those tags and leave them alone.
+                        </div>
+                    </div>
+                </div>
+
                 <button is="emby-button" type="submit" class="raised button-submit block">
                     <span>Save</span>
                 </button>
@@ -80,8 +119,19 @@
         (function () {
             var pluginId = '4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84';
             var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'YearNamespace'];
-            var boolFields = ['EnableOrigin', 'EnableLanguage', 'EnableYear', 'RemoveObsoleteTags', 'DryRun'];
+            var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableYear', 'RemoveObsoleteTags', 'DryRun'];
+            var listFields = ['Aliases', 'KnownPrefixes'];
             var taskKey = 'TagsmithSync';
+
+            function toLines(value) {
+                return (value || []).join('\n');
+            }
+
+            function fromLines(value) {
+                return (value || '').split('\n')
+                    .map(function (line) { return line.trim(); })
+                    .filter(function (line) { return line.length > 0; });
+            }
 
             document.querySelector('#TagsmithConfigPage').addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();
@@ -91,6 +141,9 @@
                     });
                     boolFields.forEach(function (id) {
                         document.querySelector('#' + id).checked = !!config[id];
+                    });
+                    listFields.forEach(function (id) {
+                        document.querySelector('#' + id).value = toLines(config[id]);
                     });
                     Dashboard.hideLoadingMsg();
                 });
@@ -105,6 +158,9 @@
                     });
                     boolFields.forEach(function (id) {
                         config[id] = document.querySelector('#' + id).checked;
+                    });
+                    listFields.forEach(function (id) {
+                        config[id] = fromLines(document.querySelector('#' + id).value);
                     });
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);

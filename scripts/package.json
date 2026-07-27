@@ -1,0 +1,10 @@
+{
+  "name": "tagsmith-tools",
+  "private": true,
+  "type": "module",
+  "description": "Generator for the embedded CLDR country alias dictionary.",
+  "dependencies": {
+    "cldr-core": "^46.0.0",
+    "cldr-localenames-modern": "^46.0.0"
+  }
+}

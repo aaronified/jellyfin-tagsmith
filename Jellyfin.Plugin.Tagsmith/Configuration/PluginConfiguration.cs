@@ -23,6 +23,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public string OriginNamespace { get; set; } = "origin";
 
     /// <summary>
+    /// Gets or sets a value indicating whether country names are resolved to a single
+    /// canonical form via <see cref="Tagging.CountryAliasCatalog"/>.
+    /// </summary>
+    public bool CanonicaliseCountries { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether audio-language tags are written.
     /// </summary>
     public bool EnableLanguage { get; set; } = true;
@@ -52,4 +58,22 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether changes are logged but not saved.
     /// </summary>
     public bool DryRun { get; set; }
+
+    /// <summary>
+    /// Gets or sets rewrite rules applied to generated tags, one per line.
+    /// See <see cref="Tagging.TagAliasMap"/> for the syntax.
+    /// </summary>
+    public string[] Aliases { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets every tag prefix Tagsmith has ever written, e.g. <c>origin=</c>.
+    /// </summary>
+    /// <remarks>
+    /// Maintained automatically. Pruning is prefix-based, so this list is what lets
+    /// Tagsmith clean up after a namespace rename, a separator change, or a namespace
+    /// being switched off — in all three cases the old prefix is no longer active but
+    /// its tags still need removing. Delete an entry here to make Tagsmith forget (and
+    /// therefore stop managing and stop deleting) tags with that prefix.
+    /// </remarks>
+    public string[] KnownPrefixes { get; set; } = [];
 }
