@@ -50,6 +50,10 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          # Via the environment, never interpolated into the script. Release notes contain
+          # backticks; substituted inline, the shell runs them as commands and every inline
+          # code span vanishes from the published notes.
+          CHANGELOG: ${{ inputs.changelog }}
         run: |
           tag="v${{ steps.v.outputs.version }}"
           if gh release view "$tag" >/dev/null 2>&1; then
@@ -58,16 +62,18 @@ jobs:
             gh release create "$tag" \
               "artifacts/${{ steps.v.outputs.zip }}" \
               --title "$tag" \
-              --notes "${{ inputs.changelog }}"
+              --notes "$CHANGELOG"
           fi
 
       - name: Update manifest
+        env:
+          CHANGELOG: ${{ inputs.changelog }}
         run: |
           ./scripts/update-manifest.sh \
             "${{ steps.v.outputs.version }}" \
             "artifacts/${{ steps.v.outputs.zip }}" \
             "${{ github.server_url }}/${{ github.repository }}/releases/download/v${{ steps.v.outputs.version }}/${{ steps.v.outputs.zip }}" \
-            "${{ inputs.changelog }}"
+            "$CHANGELOG"
 
       - name: Commit manifest
         run: |
