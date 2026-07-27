@@ -1,8 +1,8 @@
 # Collections projection
 
-**Status: implemented in 0.0.3, revised in 0.0.4, off by default. The rendering of a plugin-created
-collections library has not yet been confirmed on a live server — enable one namespace
-first.**
+**Status: implemented in 0.0.3, revised in 0.0.4 and again in 0.0.5, off by default. The
+rendering of a plugin-created collections library has not yet been confirmed on a live
+server — enable one namespace first.**
 
 Jellyfin dropped tags from global search in 10.10, and several clients — Fladder among
 them — neither display nor filter on tags at all. Tags are therefore invisible on exactly
@@ -27,8 +27,7 @@ tags  ->  group items by tag  ->  reconcile collections  ->  reconcile libraries
 ```
 
 Nothing is copied, moved, or symlinked. A collection is a database item plus a ~1 KB
-`collection.xml` listing the item IDs of its members. Media directories are never read or
-written.
+`collection.xml` listing its members. Media directories are never read or written.
 
 ## Disk layout
 
@@ -50,6 +49,61 @@ Roughly 100 files under 200 KB for a typical library.
 filesystem collection creation fails outright
 ([jellyfin#14504](https://github.com/jellyfin/jellyfin/issues/14504)). This requirement is
 stated on the settings page and in the README.
+
+### How a collection is created
+
+Tagsmith writes the box set folder itself rather than calling
+`ICollectionManager.CreateCollectionAsync`. That method takes a
+`CollectionCreationOptions.ParentId`, but **10.11.11 ignores it** — it resolves its parent
+with `GetCollectionsFolder(true)`, hard-wired to `Path.Combine(appPaths.DataPath,
+"collections")`. Every collection therefore landed in the user's built-in Collections
+library while the libraries Tagsmith created stayed empty. A box set belongs to whichever
+library its folder sits in, so the only way to place one is to create the directory there.
+
+The on-disk contract, all of it transcribed from the 10.11.11 server source:
+
+| Piece | Rule | Where it comes from |
+| --- | --- | --- |
+| Folder name | `<Display Name> [boxset]` | `BoxSetResolver` resolves a directory as a box set when the name contains `[boxset]` **or** it holds a `collection.xml`, then strips the suffix to derive the name |
+| Metadata file | `collection.xml` in that folder | `BoxSetXmlSaver.GetLocalSavePath`, `BoxSetXmlProvider.GetXmlFile` |
+| Root element | `<Item>` | `BaseXmlSaver.GetRootElementName`, not overridden for box sets |
+| Members | `<CollectionItems><CollectionItem>…` | `BoxSetXmlParser.FetchFromCollectionItemsNode` |
+| Member reference | `<Path>` when the item has one, `<ItemId>` otherwise | `LinkedChild.Create`, and `BaseItemXmlParser.GetLinkedChild` |
+| Lock | `<LockData>true</LockData>` | see [Images](#images) |
+
+Members are referenced **by path**, not by id, and that is not a style choice.
+`BoxSetMetadataService.MergeData` merges linked children with `.DistinctBy(i => i.Path)`,
+so a file whose members all carry a null path collapses to a single member.
+
+Getting this wrong produces a folder that resolves as a plain media folder, which is worse
+than producing nothing at all, so `BoxSetFolderTests` pins each rule to the server
+behaviour it mirrors.
+
+After writing the folders for a projection, Tagsmith runs one scoped `ValidateChildren`
+over its own directory — the same call the full library scan makes, just rooted lower down
+— so the collections appear in the same run rather than the next one. The user's media
+folders are never scanned.
+
+### How membership is maintained afterwards
+
+Writing the file is a one-off. From then on Tagsmith uses
+`ICollectionManager.AddToCollectionAsync` and `RemoveFromCollectionAsync`, which take an
+existing box set id and are the same calls the web UI makes. Two reasons:
+
+- `collection.xml` is only read at scan time, so rewriting it would leave the database
+  stale until something triggered a rescan — every membership change would cost a scan and
+  land at an unpredictable moment.
+- Once the collection exists the file is Jellyfin's. The library is created with
+  `SaveLocalMetadata = true` and `AddToCollectionAsync` queues a refresh with `ForceSave`,
+  so `BoxSetXmlSaver` rewrites it. Writing it ourselves would race the saver, and the saver
+  would win.
+
+## Dry run
+
+*Dry run* covers the projection, not just tagging. With it on, Tagsmith creates no
+libraries, no collections and no files, deletes nothing, applies no artwork, and does not
+write configuration — including the projection-disabled decision below. It logs each
+action it would have taken, prefixed `[dry-run]`.
 
 ## What the user sees
 
@@ -88,6 +142,14 @@ Animated GIFs are accepted but the server re-encodes on resize, so treat them as
 Without an image, tiles fall back to a collage of member posters, so this is polish rather
 than a requirement.
 
+Tagsmith's collections are created **locked** (`<LockData>true</LockData>`). That is what
+keeps Jellyfin's remote image providers off them —
+`ProviderManager.CanRefreshImages` returns false for a locked item outside a forced full
+refresh. Without it a provider-supplied poster is indistinguishable from one the user set
+by hand, and the adoption rule below would write it over the user's curated artwork file.
+Locking also keeps remote *metadata* providers off, which is what you want for an item
+called "India".
+
 ### Artwork is not bundled
 
 The plugin ships no images. A starter set lives in `assets/thumbnails/<namespace>/` in this
@@ -121,14 +183,20 @@ down and recreated.
 
 Otherwise the file in the folder is applied to the collection.
 
-Each direction is guarded by a hash of the image last synced, so a run with nothing changed
-writes nothing. One value never accumulates two files: adopting `india.jpg` removes an
-existing `india.png`.
+Each direction is guarded by a hash, so a run with nothing changed writes nothing. Two
+hashes are kept per value, not one: the artwork file in the thumbnails folder, and the
+image that actually landed on the collection. They differ because the server re-encodes on
+save, and conflating them meant Tagsmith read its own poster as user intent and copied it
+back over the source file.
+
+One value never accumulates two files: adopting `india.jpg` removes an existing
+`india.png`.
 
 ## Reconciliation
 
-Tagsmith records the IDs of every library and collection it creates. It only ever modifies
-or deletes those. A hand-made collection that happens to share a name is never touched.
+Tagsmith records the **id** of every library and collection it creates, and only ever
+modifies or deletes those. Nothing is ever claimed by name: a library or a hand-made
+collection that happens to share a name is never touched, and never deleted.
 
 On each run:
 
@@ -136,15 +204,29 @@ On each run:
 | --- | --- |
 | Namespace enabled, library missing | Create it |
 | Namespace enabled, library exists | Reconcile its collections |
+| **Wanted library name already taken by a library Tagsmith does not own** | Refuse. Log an error and skip the projection — never adopt |
+| Library renamed in Jellyfin's own settings | Follow the rename. Ownership is by id, so this is not a deletion |
+| Library name changed in *Tagsmith's* settings | Tear down and rebuild — Jellyfin 10.11 exposes no rename on `ILibraryManager` |
 | Namespace disabled in Tagsmith | Stop maintaining. Delete only if *remove when disabled* is set |
-| **Library deleted in Jellyfin's own settings** | Treat as intent. Flip the namespace off in config, log it, **do not recreate** |
+| **Library deleted in Jellyfin's own settings** | Treat as intent. Flip the namespace off in config, **persist that immediately**, log it, **do not recreate** |
 | Collection exists for a value with no items left | Delete it (Tagsmith-owned only) |
-| Box sets orphaned by a library deleted out of band | Clean up on the next run |
+| Box sets orphaned by a library deleted out of band | Delete their folders in the same pass. Their database items went with the library, so this is a guarded directory delete: the folder must end in ` [boxset]` and sit directly inside one of Tagsmith's own per-projection directories |
 
-The fourth row is the one that matters. The failure mode worth designing against is not
-deletion — it is a nightly task silently resurrecting a library the user deliberately
-removed, leaving them unable to be rid of it short of uninstalling the plugin. Reconcile,
-never resurrect.
+The library-deleted row is the one that matters. The failure mode worth designing against
+is not deletion — it is a nightly task silently resurrecting a library the user
+deliberately removed, leaving them unable to be rid of it short of uninstalling the plugin.
+Reconcile, never resurrect. That decision is written to configuration the moment it is
+made, rather than at the end of the run, so cancelling the task partway through cannot lose
+it.
+
+Two secondary signals keep this honest. The configured library name is sanitised exactly as
+`LibraryManager.AddVirtualFolder` sanitises it — `GetValidFilename` on a trimmed name —
+before it is compared with anything, because otherwise a name like `Origins/Countries`
+never matches the `Origins Countries` Jellyfin actually created, and the nightly task
+produces `Origins Countries2`, `Origins Countries3`, one library per run. And each
+projection's library points at a private directory, so a library serving
+`<config>/data/tagsmith-origin` is Tagsmith's by construction — that is what heals a lost
+record and what migrates a pre-0.0.5 configuration, which recorded only a name.
 
 ## Performance
 
@@ -165,16 +247,44 @@ figures above are a model, not a benchmark.
 Compiled against `Jellyfin.Controller` 10.11.11:
 
 ```csharp
-library.AddVirtualFolder(name, CollectionTypeOptions.boxsets, new LibraryOptions(), true);
+// Awaited. AddVirtualFolder returns a Task, and the await ValidateTopLibraryFolders in its
+// finally block is what registers the CollectionFolder — fire and forget leaves ItemId null
+// on the very next lookup, and swallows the ArgumentException for a bad path as an
+// unobserved task exception.
+await library.AddVirtualFolder(name, CollectionTypeOptions.boxsets, options, refreshLibrary: false);
 await library.RemoveVirtualFolder(name, refreshLibrary: true);
-library.GetVirtualFolders();
+library.GetVirtualFolders();              // VirtualFolderInfo: Name, ItemId, Locations
 
-await collections.CreateCollectionAsync(new CollectionCreationOptions { Name, ParentId, ItemIdList, IsLocked });
+library.FindByPath(path, isFolder: true);
+await folder.ValidateChildren(progress, new MetadataRefreshOptions(new DirectoryService(fs)),
+                              recursive: true, allowRemoveRoot: false, cancellationToken);
+
 await collections.AddToCollectionAsync(boxSetId, itemIds);
 await collections.RemoveFromCollectionAsync(boxSetId, itemIds);
 
-library.DeleteItem(boxSet, new DeleteOptions { DeleteFileLocation = false }, notifyParentItem: true);
+library.DeleteItem(boxSet, new DeleteOptions { DeleteFileLocation = true }, notifyParentItem: true);
 ```
+
+**`CollectionCreationOptions.ParentId` compiles but is ignored.** Do not reintroduce it.
+`CollectionManager.CreateCollectionAsync` never reads it:
+
+```csharp
+var folderName = _fileSystem.GetValidFilename(name) + " [boxset]";
+var parentFolder = await GetCollectionsFolder(true).ConfigureAwait(false);   // <data>/collections
+var path = Path.Combine(parentFolder.Path, folderName);
+```
+
+Every collection therefore goes to the built-in Collections library whatever `ParentId`
+says. That is why Tagsmith writes the folder itself; `ICollectionManager` is used only for
+membership on a collection that already exists.
+
+Two settings on the created library are load-bearing:
+
+- `SaveLocalMetadata = true` — without it Jellyfin never writes `collection.xml` back, so
+  the membership Tagsmith seeded has no on-disk mirror. `CollectionManager` sets it for the
+  built-in Collections library; `new LibraryOptions()` defaults it to false.
+- `EnableRealtimeMonitor = false` — same reason `CollectionManager` sets it: nothing here is
+  edited from outside.
 
 **Unverified:** that a plugin-created `boxsets` virtual folder renders identically to the
 built-in Collections library. It compiles; whether clients treat it the same needs a live

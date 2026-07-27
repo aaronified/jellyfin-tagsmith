@@ -1,11 +1,12 @@
 ---
 name: "Tagsmith"
 guid: "4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84"
-version: "0.0.4"
+version: "0.0.5"
 targetAbi: "10.11.11.0"
 framework: "net9.0"
 owner: "aaronified"
 category: "Metadata"
+imageUrl: "https://raw.githubusercontent.com/aaronified/jellyfin-tagsmith/main/assets/tagsmith.png"
 overview: "Automatic namespaced metadata tags for Jellyfin."
 description: >
   Derives searchable, machine-readable tags (origin=, lang=, year= ...) from metadata

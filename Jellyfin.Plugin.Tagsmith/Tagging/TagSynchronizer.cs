@@ -110,6 +110,13 @@ public class TagSynchronizer
     /// Records any newly seen prefix in configuration so it stays prunable after the
     /// namespace or separator that produced it changes.
     /// </summary>
+    /// <remarks>
+    /// A dry run does not persist. It used to, which was the one thing a dry run wrote: a
+    /// prefix is a claim of ownership over every tag carrying it, and recording that claim
+    /// from a run whose whole purpose is to change nothing means an aborted experiment
+    /// leaves Tagsmith deleting tags it was only ever asked to describe. The in-memory set
+    /// is still updated so the log shows the prefixes the run pruned against.
+    /// </remarks>
     private void RememberPrefixes(PluginConfiguration configuration, IEnumerable<string> activePrefixes)
     {
         var known = new HashSet<string>(configuration.KnownPrefixes, StringComparer.OrdinalIgnoreCase);
@@ -122,6 +129,15 @@ public class TagSynchronizer
         }
 
         configuration.KnownPrefixes = known.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        if (configuration.DryRun)
+        {
+            _logger.LogInformation(
+                "[dry-run] Tagsmith would start managing prefixes: {Prefixes}",
+                string.Join(", ", configuration.KnownPrefixes));
+            return;
+        }
+
         Plugin.Instance?.SaveConfiguration();
         _logger.LogInformation(
             "Tagsmith now manages prefixes: {Prefixes}",

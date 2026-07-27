@@ -6,7 +6,7 @@
     "overview": "Automatic namespaced metadata tags for Jellyfin.",
     "owner": "aaronified",
     "category": "Metadata",
-    "imageUrl": "",
+    "imageUrl": "https://raw.githubusercontent.com/aaronified/jellyfin-tagsmith/main/assets/tagsmith.png",
     "versions": [
       {
         "version": "0.0.2",

@@ -76,6 +76,9 @@ Jellyfin.Plugin.Tagsmith/
     TagSynchronizer.cs           merge/prune logic, writes via ILibraryManager
   Collections/
     TagGrouping.cs               tags -> projected values, decade rollup
+    BoxSetFolder.cs              the on-disk box set contract: folder name, collection.xml
+    LibraryOwnership.cs          which libraries are Tagsmith's, and what to do about them
+    MemberDiff.cs                collection membership diffing
     ThumbnailLocator.cs          user artwork lookup
     CollectionProjector.cs       library and collection reconciliation
   Providers/
@@ -129,7 +132,7 @@ dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o artifacts
 ```
 
 Copy `artifacts/Jellyfin.Plugin.Tagsmith.dll` into
-`<jellyfin-config>/plugins/Tagsmith_0.0.4/` and restart the server.
+`<jellyfin-config>/plugins/Tagsmith_0.0.5/` and restart the server.
 
 The `Jellyfin.Controller` package version in the csproj must match the server version,
 or the plugin loads as `NotSupported`.
@@ -149,6 +152,9 @@ MIT — see [LICENSE](LICENSE).
 - `original_lang=` needs an external provider — Jellyfin doesn't store it.
 - No per-item trigger; the plugin assumes the web UI isn't used on client devices, so
   tagging happens on the schedule or on demand from the settings page.
-- Renaming a projection's library tears the old one down and rebuilds it, since Jellyfin
-  10.11 exposes no rename for virtual folders. Collections are regenerated, but per-user
-  access grants are not.
+- Renaming a projection's library **in Tagsmith's settings** tears the old one down and
+  rebuilds it, since Jellyfin 10.11 exposes no rename on `ILibraryManager`. Collections are
+  regenerated, but per-user access grants are not. Renaming it in Jellyfin's own dashboard
+  is fine — Tagsmith owns libraries by id and simply follows the new name.
+- If the library name a projection wants is already taken by a library Tagsmith did not
+  create, it refuses and logs an error rather than adopting it. Pick a different name.

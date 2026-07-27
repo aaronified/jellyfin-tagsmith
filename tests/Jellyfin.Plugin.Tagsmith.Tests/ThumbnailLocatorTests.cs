@@ -84,6 +84,7 @@ public class ThumbnailLocatorTests : IDisposable
 
         var written = Locator.Store("origin", "india", source);
 
+        Assert.NotNull(written);
         Assert.EndsWith(Path.Combine("origin", "india.jpg"), written, StringComparison.Ordinal);
         Assert.Equal("hand-picked poster", File.ReadAllText(written));
         Assert.NotNull(Locator.Find("origin", "india"));
@@ -111,6 +112,72 @@ public class ThumbnailLocatorTests : IDisposable
         File.WriteAllText(source, "bytes");
 
         Assert.EndsWith(".png", Locator.Store("year", "1950s", source), StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------ containment
+
+    [Theory]
+    [InlineData("../../../etc")]
+    [InlineData("..")]
+    [InlineData("/etc")]
+    [InlineData("origin/../../..")]
+    [InlineData("origin/sub")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void A_namespace_can_never_escape_the_thumbnails_tree(string tagNamespace)
+    {
+        // Store runs a File.Delete loop over the directory it resolves, so a namespace that
+        // escapes would have it deleting files somewhere else entirely.
+        Assert.Null(Locator.DirectoryFor(tagNamespace));
+        Assert.Null(Locator.Find(tagNamespace, "india"));
+    }
+
+    [Fact]
+    public void An_escaping_namespace_stores_nothing()
+    {
+        var outside = Path.Combine(_root, "outside");
+        Directory.CreateDirectory(outside);
+        var victim = Path.Combine(outside, "india.png");
+        File.WriteAllText(victim, "someone else's file");
+
+        var source = Path.Combine(_root, "manual.png");
+        File.WriteAllText(source, "replacement");
+
+        Assert.Null(Locator.Store("../../outside", "india", source));
+        Assert.Equal("someone else's file", File.ReadAllText(victim));
+    }
+
+    [Fact]
+    public void A_plain_namespace_resolves_inside_the_tree()
+    {
+        var directory = Locator.DirectoryFor("origin");
+
+        Assert.NotNull(directory);
+        Assert.StartsWith(Locator.Root, directory, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------ empty slugs
+
+    [Fact]
+    public void A_value_that_slugifies_to_nothing_is_not_stored()
+    {
+        // `origin=!!!` slugifies to "", which used to write "<dir>/.png" — a dotfile that
+        // then matched every other empty-stemmed file.
+        var source = Path.Combine(_root, "manual.png");
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(source, "poster");
+
+        Assert.Null(Locator.Store("origin", "!!!", source));
+
+        var directory = Path.Combine(_root, "tagsmith", "thumbnails", "origin");
+        Assert.False(Directory.Exists(directory) && Directory.GetFiles(directory).Length > 0);
+    }
+
+    [Fact]
+    public void A_value_that_slugifies_to_nothing_matches_nothing()
+    {
+        Given("origin", ".png");
+        Assert.Null(Locator.Find("origin", "!!!"));
     }
 
     [Theory]

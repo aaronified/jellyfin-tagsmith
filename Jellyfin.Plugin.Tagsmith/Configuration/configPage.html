@@ -66,6 +66,11 @@
                         <input is="emby-checkbox" type="checkbox" id="DryRun" />
                         <span>Dry run (log changes only)</span>
                     </label>
+                    <div class="fieldDescription">
+                        Covers the collections projection too: no libraries, collections,
+                        artwork or files are created or deleted, and nothing is saved back
+                        to these settings. Look for <code>[dry-run]</code> in the log.
+                    </div>
 
                 </div>
 
@@ -109,8 +114,11 @@
                     </label>
                     <div class="fieldDescription">
                         Off by default. Deleting a library in Jellyfin's own settings instead is
-                        always safe — Tagsmith notices, switches that projection off, and will
-                        not recreate it.
+                        always safe — Tagsmith notices, switches that projection off, cleans up
+                        the collections it left behind, and will not recreate it. Renaming one
+                        there is safe too; Tagsmith follows the new name. Tagsmith only ever
+                        touches libraries it created itself: if the name above is already taken
+                        by one of yours, it refuses and says so in the log.
                     </div>
 
                     <div class="fieldDescription" style="margin-top:1em;">

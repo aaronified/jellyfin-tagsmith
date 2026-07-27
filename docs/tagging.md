@@ -98,6 +98,11 @@ visible and editable on the settings page: **delete a line to make Tagsmith forg
 tags and stop managing them**, which is how you keep a set of tags after turning a
 namespace off.
 
+A dry run does not add to it. Recording a prefix is a claim of ownership over every tag
+carrying it, and a run whose whole purpose is to change nothing has no business making that
+claim — otherwise an experiment you abandoned leaves Tagsmith deleting tags it was only
+ever asked to describe. The log still names the prefixes the run pruned against.
+
 ## Ownership is by namespace
 
 Tagsmith owns a **prefix**, not a list of individual tags. Everything under `origin=`
@@ -122,7 +127,9 @@ differently, which is worse to reason about than one rule applied consistently.
 - Renaming a namespace, changing the separator, or disabling a namespace still cleans up.
 - Tags outside the managed prefixes are never read, modified, or deleted.
 - Nothing is deleted except tags carrying a prefix Tagsmith is using or has used before.
-- Dry run writes nothing — changes go to the log only.
+- Dry run writes nothing — no tags, no configuration (`KnownPrefixes` included), and
+  nothing from the collections projection: no libraries, no collections, no artwork, no
+  deletions. Changes go to the log only, prefixed `[dry-run]`.
 - Re-running with unchanged settings is a no-op; the item is only saved when the computed
   tag set actually differs.
 

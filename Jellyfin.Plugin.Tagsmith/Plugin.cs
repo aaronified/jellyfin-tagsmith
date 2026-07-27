@@ -44,7 +44,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             DisplayName = "Tagsmith",
             EnableInMainMenu = true,
             MenuSection = "server",
-            MenuIcon = "label",
+            MenuIcon = "local_offer",
             EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html"
         }
     ];

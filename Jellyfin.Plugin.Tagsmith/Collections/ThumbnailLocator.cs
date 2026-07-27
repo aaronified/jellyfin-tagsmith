@@ -25,7 +25,7 @@ public class ThumbnailLocator
     /// <param name="configurationRoot">Jellyfin's config directory.</param>
     public ThumbnailLocator(string configurationRoot)
     {
-        _root = Path.Combine(configurationRoot, "tagsmith", "thumbnails");
+        _root = Path.GetFullPath(Path.Combine(configurationRoot, "tagsmith", "thumbnails"));
     }
 
     /// <summary>
@@ -34,17 +34,56 @@ public class ThumbnailLocator
     public string Root => _root;
 
     /// <summary>
-    /// Returns the artwork file for a value, or null when the user has supplied none.
+    /// Resolves the artwork directory for a namespace, or null when the namespace would
+    /// escape the thumbnails tree.
     /// </summary>
-    public string? Find(string tagNamespace, string value)
+    /// <remarks>
+    /// The namespace is a free-text setting. A rooted value, or one containing <c>..</c> or a
+    /// separator, would make <see cref="Store"/> run its "remove the old artwork for this
+    /// value" delete loop somewhere else entirely. This is admin-only configuration rather
+    /// than a privilege boundary, but a plugin has no business deleting files outside its own
+    /// directory whatever the provenance of the setting.
+    /// </remarks>
+    public string? DirectoryFor(string? tagNamespace)
     {
-        var directory = Path.Combine(_root, tagNamespace);
-        if (!Directory.Exists(directory))
+        if (string.IsNullOrWhiteSpace(tagNamespace))
         {
             return null;
         }
 
+        var trimmed = tagNamespace.Trim();
+        if (trimmed.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, ':']) >= 0
+            || trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || trimmed.Trim('.').Length == 0)
+        {
+            return null;
+        }
+
+        var combined = Path.GetFullPath(Path.Combine(_root, trimmed));
+        var prefix = _root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                     + Path.DirectorySeparatorChar;
+
+        return combined.StartsWith(prefix, StringComparison.Ordinal) ? combined : null;
+    }
+
+    /// <summary>
+    /// Returns the artwork file for a value, or null when the user has supplied none.
+    /// </summary>
+    public string? Find(string tagNamespace, string value)
+    {
+        var directory = DirectoryFor(tagNamespace);
+        if (directory is null || !Directory.Exists(directory))
+        {
+            return null;
+        }
+
+        // An empty slug would match every file whose stem also slugifies to nothing —
+        // including the ".png" dotfile Store used to be able to write.
         var wanted = TagNormalizer.Slug(value);
+        if (wanted.Length == 0)
+        {
+            return null;
+        }
 
         foreach (var file in Directory.EnumerateFiles(directory))
         {
@@ -67,10 +106,22 @@ public class ThumbnailLocator
     /// replacing whatever was there. Used to adopt a poster the user set by hand in the
     /// library UI, so it survives the collection being rebuilt.
     /// </summary>
-    /// <returns>The path written.</returns>
-    public string Store(string tagNamespace, string value, string source)
+    /// <returns>The path written, or null when the namespace or value is unusable.</returns>
+    public string? Store(string tagNamespace, string value, string source)
     {
-        var directory = Path.Combine(_root, tagNamespace);
+        var directory = DirectoryFor(tagNamespace);
+        if (directory is null)
+        {
+            return null;
+        }
+
+        // A value like `origin=!!!` slugifies to nothing, which would write "<dir>/.png".
+        var slug = TagNormalizer.Slug(value);
+        if (slug.Length == 0)
+        {
+            return null;
+        }
+
         Directory.CreateDirectory(directory);
 
         // Replace any existing artwork for this value, whatever extension it used, so one
@@ -78,7 +129,7 @@ public class ThumbnailLocator
         foreach (var stale in Directory.EnumerateFiles(directory))
         {
             if (_extensions.Contains(Path.GetExtension(stale), StringComparer.OrdinalIgnoreCase)
-                && string.Equals(TagNormalizer.Slug(Path.GetFileNameWithoutExtension(stale)), TagNormalizer.Slug(value), StringComparison.Ordinal))
+                && string.Equals(TagNormalizer.Slug(Path.GetFileNameWithoutExtension(stale)), slug, StringComparison.Ordinal))
             {
                 File.Delete(stale);
             }
@@ -90,7 +141,7 @@ public class ThumbnailLocator
             extension = ".png";
         }
 
-        var destination = Path.Combine(directory, TagNormalizer.Slug(value) + extension.ToLowerInvariant());
+        var destination = Path.Combine(directory, slug + extension.ToLowerInvariant());
         File.Copy(source, destination, true);
         return destination;
     }
