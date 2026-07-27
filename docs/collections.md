@@ -1,6 +1,8 @@
 # Collections projection
 
-**Status: specification, not yet implemented. Target 0.0.3.**
+**Status: implemented in 0.0.3, off by default. The rendering of a plugin-created
+collections library has not yet been confirmed on a live server — enable one namespace
+first.**
 
 Jellyfin dropped tags from global search in 10.10, and several clients — Fladder among
 them — neither display nor filter on tags at all. Tags are therefore invisible on exactly
@@ -14,6 +16,12 @@ without knowing tags exist.
 Tags remain the source of truth. Collections are a **projection** of the tag set, rebuilt
 on each run. Retag an item and the collections follow. Turn the projection off and the
 tags are untouched.
+
+Grouping reads the tags actually on the item, not what a provider would compute, so a tag
+added by hand in the Jellyfin UI lands in its collection on the next run exactly like a
+generated one. For that to be useful the tag also has to survive, which is why the tag
+writer records what it wrote — see *Hand-added tags* in
+[tagging.md](tagging.md#hand-added-tags).
 
 ```
 tags  ->  group items by tag  ->  reconcile collections  ->  reconcile libraries

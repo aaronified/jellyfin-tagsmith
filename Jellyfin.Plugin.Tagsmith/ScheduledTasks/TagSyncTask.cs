@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.Tagsmith.Collections;
 using Jellyfin.Plugin.Tagsmith.Tagging;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -14,6 +16,7 @@ public class TagSyncTask : IScheduledTask
 {
     private readonly ILibraryManager _libraryManager;
     private readonly TagSynchronizer _synchronizer;
+    private readonly CollectionProjector _projector;
     private readonly ILogger<TagSyncTask> _logger;
 
     /// <summary>
@@ -22,10 +25,12 @@ public class TagSyncTask : IScheduledTask
     public TagSyncTask(
         ILibraryManager libraryManager,
         TagSynchronizer synchronizer,
+        CollectionProjector projector,
         ILogger<TagSyncTask> logger)
     {
         _libraryManager = libraryManager;
         _synchronizer = synchronizer;
+        _projector = projector;
         _logger = logger;
     }
 
@@ -53,7 +58,9 @@ public class TagSyncTask : IScheduledTask
 
         _logger.LogInformation("Tagsmith: processing {Count} items", items.Count);
 
+        var tagging = Stopwatch.StartNew();
         var changed = 0;
+
         for (var i = 0; i < items.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -63,10 +70,23 @@ public class TagSyncTask : IScheduledTask
                 changed++;
             }
 
-            progress.Report(100.0 * (i + 1) / items.Count);
+            // Tagging is the bulk of the work; leave the last tenth for the projection.
+            progress.Report(90.0 * (i + 1) / items.Count);
         }
 
-        _logger.LogInformation("Tagsmith: updated {Changed} items", changed);
+        tagging.Stop();
+        _logger.LogInformation(
+            "Tagsmith: updated {Changed} of {Total} items in {Elapsed}",
+            changed,
+            items.Count,
+            tagging.Elapsed);
+
+        var projecting = Stopwatch.StartNew();
+        await _projector.ProjectAsync(items, cancellationToken).ConfigureAwait(false);
+        projecting.Stop();
+
+        progress.Report(100);
+        _logger.LogInformation("Tagsmith: projected collections in {Elapsed}", projecting.Elapsed);
     }
 
     /// <inheritdoc />

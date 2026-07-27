@@ -70,6 +70,59 @@
                 </div>
 
                 <div class="verticalSection">
+                    <h2 class="sectionTitle">Browsable collections</h2>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Several clients neither show nor filter on tags, and Jellyfin dropped
+                        tags from global search in 10.10. Projecting a namespace builds a
+                        library of collections from its tags, browsable anywhere. Tags stay the
+                        source of truth; collections are rebuilt from them on each run.
+                        <strong>Jellyfin must be able to write to its config directory.</strong>
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ProjectOrigin" />
+                        <span>Project origins into a library</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="OriginLibraryName" label="Origin library name" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ProjectLanguage" />
+                        <span>Project languages into a library</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="LanguageLibraryName" label="Language library name" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ProjectYear" />
+                        <span>Project years into a library, grouped by decade</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="YearLibraryName" label="Year library name" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="RemoveCollectionsWhenDisabled" />
+                        <span>Delete the collections and library when a projection is turned off</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Off by default. Deleting a library in Jellyfin's own settings instead is
+                        always safe — Tagsmith notices, switches that projection off, and will
+                        not recreate it.
+                    </div>
+
+                    <div class="fieldDescription" style="margin-top:1em;">
+                        Collection artwork is optional and ships separately. Drop images into
+                        <code>&lt;config&gt;/tagsmith/thumbnails/&lt;namespace&gt;/</code> named
+                        after the tag value — <code>india.png</code>, <code>bengali.png</code>,
+                        <code>1950s.png</code>. Case and separators do not matter. A poster you
+                        set by hand in the library UI is never overwritten.
+                    </div>
+                </div>
+
+                <div class="verticalSection">
                     <h2 class="sectionTitle">Aliases</h2>
                     <div class="inputContainer">
                         <textarea is="emby-textarea" id="Aliases" rows="6"
@@ -118,8 +171,11 @@
     <script type="text/javascript">
         (function () {
             var pluginId = '4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84';
-            var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'YearNamespace'];
-            var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableYear', 'RemoveObsoleteTags', 'DryRun'];
+            var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'YearNamespace',
+                'OriginLibraryName', 'LanguageLibraryName', 'YearLibraryName'];
+            var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableYear',
+                'RemoveObsoleteTags', 'DryRun',
+                'ProjectOrigin', 'ProjectLanguage', 'ProjectYear', 'RemoveCollectionsWhenDisabled'];
             var listFields = ['Aliases', 'KnownPrefixes'];
             var taskKey = 'TagsmithSync';
 

@@ -8,6 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The plugin excludes runtime assets, since the server provides them. Tests need
+         them copied locally to instantiate anything deriving from a Jellyfin type. -->
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />

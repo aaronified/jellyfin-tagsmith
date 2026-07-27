@@ -1,6 +1,7 @@
 using Jellyfin.Plugin.Tagsmith.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.Tagsmith.Tagging;
@@ -11,6 +12,13 @@ namespace Jellyfin.Plugin.Tagsmith.Tagging;
 /// </summary>
 public class TagSynchronizer
 {
+    /// <summary>
+    /// Provider id under which the tags Tagsmith wrote are recorded on each item.
+    /// </summary>
+    private const string ProviderKey = "Tagsmith";
+
+    private const char RecordSeparator = '';
+
     private readonly ILibraryManager _libraryManager;
     private readonly IEnumerable<ITagProvider> _providers;
     private readonly ILogger<TagSynchronizer> _logger;
@@ -64,8 +72,18 @@ public class TagSynchronizer
         var managedPrefixes = new HashSet<string>(configuration.KnownPrefixes, StringComparer.OrdinalIgnoreCase);
         managedPrefixes.UnionWith(activePrefixes);
 
+        // Prune only the tags Tagsmith itself wrote last time, recorded on the item. That
+        // is what lets a tag added by hand in the Jellyfin UI survive the nightly run —
+        // it was never ours, so it is not ours to remove. Items tagged before this was
+        // introduced have no record, so fall back to pruning by prefix once, after which
+        // the record exists.
+        var previouslyWritten = ReadWrittenTags(item);
+
         var retained = item.Tags.Where(tag =>
-            !configuration.RemoveObsoleteTags || !IsManaged(tag, managedPrefixes));
+            !configuration.RemoveObsoleteTags
+            || !(previouslyWritten is null
+                ? IsManaged(tag, managedPrefixes)
+                : previouslyWritten.Contains(tag)));
 
         var updated = retained
             .Concat(desired)
@@ -73,7 +91,12 @@ public class TagSynchronizer
             .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (updated.SequenceEqual(item.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase))
+        var record = string.Join(RecordSeparator, desired.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+        var tagsUnchanged = updated.SequenceEqual(
+            item.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
+
+        if (tagsUnchanged && string.Equals(ReadRecord(item), record, StringComparison.Ordinal))
         {
             return false;
         }
@@ -88,6 +111,7 @@ public class TagSynchronizer
         }
 
         item.Tags = updated;
+        item.SetProviderId(ProviderKey, record);
 
         await _libraryManager.UpdateItemAsync(
                 item,
@@ -99,6 +123,26 @@ public class TagSynchronizer
         _logger.LogDebug("Updated tags on {Item}: {Tags}", item.Name, string.Join(", ", updated));
         return true;
     }
+
+    /// <summary>
+    /// Reads the tags Tagsmith wrote to this item last time, or null when it has never
+    /// written to it.
+    /// </summary>
+    private static HashSet<string>? ReadWrittenTags(BaseItem item)
+    {
+        var record = ReadRecord(item);
+        if (record is null)
+        {
+            return null;
+        }
+
+        return record.Length == 0
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : record.Split(RecordSeparator).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? ReadRecord(BaseItem item) =>
+        item.TryGetProviderId(ProviderKey, out var record) ? record : null;
 
     /// <summary>
     /// Records any newly seen prefix in configuration so it stays prunable after the

@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.Tagsmith.Collections;
 using Jellyfin.Plugin.Tagsmith.Providers;
 using Jellyfin.Plugin.Tagsmith.Tagging;
 using MediaBrowser.Controller;
@@ -17,5 +18,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Add further ITagProvider implementations here (TMDb, awards, curated lists).
         serviceCollection.AddSingleton<ITagProvider, CoreMetadataTagProvider>();
         serviceCollection.AddSingleton<TagSynchronizer>();
+        serviceCollection.AddSingleton<CollectionProjector>();
     }
 }

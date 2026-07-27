@@ -98,11 +98,25 @@ visible and editable on the settings page: **delete a line to make Tagsmith forg
 tags and stop managing them**, which is how you keep a set of tags after turning a
 namespace off.
 
+## Hand-added tags
+
+Add `origin=india` to a film by hand and it stays. Tagsmith records the exact set of tags
+it wrote to each item, in the item's provider ids under the key `Tagsmith`, and prunes only
+those. A tag it never wrote is not its to remove.
+
+This matters because the projection groups on the tags actually present, so a hand-added
+tag puts the film in the India collection on the next run — which would be useless if the
+same run deleted the tag.
+
+Items tagged before this existed have no record, so the first run after upgrading falls
+back to pruning by prefix. From then on the record exists and manual additions are safe.
+
 ## Guarantees
 
 - A changed value rewrites its tag; it never adds a second one.
 - Renaming a namespace, changing the separator, or disabling a namespace still cleans up.
 - Tags outside the managed prefixes are never read, modified, or deleted.
+- A tag added by hand is never deleted, even inside a managed namespace.
 - Dry run writes nothing — changes go to the log only.
 - Re-running with unchanged settings is a no-op; the item is only saved when the computed
   tag set actually differs.

@@ -27,9 +27,9 @@ the existing tag rather than adding another. Full detail in [docs/tagging.md](do
 
 ## Status
 
-v1.0 (this scaffold) covers only metadata Jellyfin already has: production countries,
-audio languages and first release year. See [docs/plan.md](docs/plan.md) for the roadmap
-(v1.1 external providers, v1.2 awards, v1.3 curated lists).
+Alpha. Covers metadata Jellyfin already has — production countries, audio languages and
+first release year — plus the collections projection. See [docs/plan.md](docs/plan.md) for
+the roadmap (external providers, awards, curated lists).
 
 ## Finding tagged items
 
@@ -37,10 +37,25 @@ Jellyfin removed tags from global search in 10.10 for performance reasons. Filte
 works: click a tag on any item page, use `/web/#/list.html?type=tag&tag=origin%3Dindia`, or
 query `GET /Items?Recursive=true&Tags=origin%3Dindia`. There is no wildcard matching.
 
-Some clients — Fladder, for one — neither show nor filter on tags at all. The planned fix
-is a collections projection: one browsable library per namespace, built from the tags. See
-[docs/collections.md](docs/collections.md). It requires Jellyfin to have write access to
-its own config directory, since that is where collection metadata lives.
+Some clients — Fladder, for one — neither show nor filter on tags at all. For those, turn
+on the **collections projection**: each namespace becomes a browsable library of
+collections built from the tags, which works anywhere.
+
+```
+Origins  →  India · Japan · France        Decades  →  1950s · 1960s · 1970s
+```
+
+Off by default. Tags stay the source of truth and collections are rebuilt from them, so a
+tag you add by hand lands in its collection on the next run. Years project by decade while
+`year=1954` tags stay precise. Requires Jellyfin to have write access to its config
+directory. Full detail in [docs/collections.md](docs/collections.md).
+
+### Collection artwork
+
+Optional, and not shipped with the plugin. A starter set — flags, native-script language
+cards, decade cards — lives in [assets/thumbnails](assets/thumbnails). Copy the ones you
+want into `<config>/tagsmith/thumbnails/<namespace>/`, named after the tag value; case and
+separators do not matter. A poster you set by hand in the library UI is never overwritten.
 
 ## Layout
 
@@ -56,11 +71,16 @@ Jellyfin.Plugin.Tagsmith/
     TagAliasMap.cs               user rewrite rules
     CountryAliasCatalog.cs       country name canonicalisation
     TagSynchronizer.cs           merge/prune logic, writes via ILibraryManager
+  Collections/
+    TagGrouping.cs               tags -> projected values, decade rollup
+    ThumbnailLocator.cs          user artwork lookup
+    CollectionProjector.cs       library and collection reconciliation
   Providers/
-    CoreMetadataTagProvider.cs   v1.0 provider, no network
+    CoreMetadataTagProvider.cs   core provider, no network
   ScheduledTasks/
-    TagSyncTask.cs               full-library pass
-scripts/                         CLDR generator, manifest updater
+    TagSyncTask.cs               full-library pass, then projection
+assets/thumbnails/               starter artwork, downloaded separately
+scripts/                         CLDR and artwork generators, manifest updater
 tests/                           xunit suite
 ```
 
@@ -106,7 +126,7 @@ dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o artifacts
 ```
 
 Copy `artifacts/Jellyfin.Plugin.Tagsmith.dll` into
-`<jellyfin-config>/plugins/Tagsmith_0.0.2/` and restart the server.
+`<jellyfin-config>/plugins/Tagsmith_0.0.3/` and restart the server.
 
 The `Jellyfin.Controller` package version in the csproj must match the server version,
 or the plugin loads as `NotSupported`.
@@ -123,6 +143,9 @@ MIT — see [LICENSE](LICENSE).
 
 ## Known gaps
 
-- `original_lang=` needs an external provider (v1.1) — Jellyfin doesn't store it.
+- `original_lang=` needs an external provider — Jellyfin doesn't store it.
 - No per-item trigger; the plugin assumes the web UI isn't used on client devices, so
   tagging happens on the schedule or on demand from the settings page.
+- Renaming a projection's library tears the old one down and rebuilds it, since Jellyfin
+  10.11 exposes no rename for virtual folders. Collections are regenerated, but per-user
+  access grants are not.

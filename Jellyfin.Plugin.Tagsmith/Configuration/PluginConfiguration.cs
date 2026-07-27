@@ -66,6 +66,55 @@ public class PluginConfiguration : BasePluginConfiguration
     public string[] Aliases { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets a value indicating whether production countries are projected into a
+    /// browsable collections library.
+    /// </summary>
+    public bool ProjectOrigin { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether audio languages are projected.
+    /// </summary>
+    public bool ProjectLanguage { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether release years are projected, grouped by decade.
+    /// </summary>
+    public bool ProjectYear { get; set; }
+
+    /// <summary>
+    /// Gets or sets the library name for the origin projection.
+    /// </summary>
+    public string OriginLibraryName { get; set; } = "Origins";
+
+    /// <summary>
+    /// Gets or sets the library name for the language projection.
+    /// </summary>
+    public string LanguageLibraryName { get; set; } = "Languages";
+
+    /// <summary>
+    /// Gets or sets the library name for the year projection.
+    /// </summary>
+    public string YearLibraryName { get; set; } = "Decades";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether disabling a projection also deletes the
+    /// collections and library it created. Off by default: silently removing a browsing
+    /// structure because a box was unticked is worse than leaving it behind.
+    /// </summary>
+    public bool RemoveCollectionsWhenDisabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the collections Tagsmith created, so it can modify and delete its own
+    /// without ever touching one the user made by hand.
+    /// </summary>
+    public ManagedCollection[] ManagedCollections { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the libraries Tagsmith created, keyed by projection.
+    /// </summary>
+    public ManagedLibrary[] ManagedLibraries { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets every tag prefix Tagsmith has ever written, e.g. <c>origin=</c>.
     /// </summary>
     /// <remarks>
