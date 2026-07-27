@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, e.g. 1.0.0.1"
+        required: true
+      changelog:
+        description: "Changelog line"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Resolve version
+        id: v
+        run: |
+          v="${{ inputs.version }}"
+          case "$v" in
+            *.*.*.*) ;;
+            *) v="$v.0" ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "zip=tagsmith_$v.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: |
+          dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o publish \
+            -p:Version=${{ steps.v.outputs.version }} \
+            -p:AssemblyVersion=${{ steps.v.outputs.version }} \
+            -p:FileVersion=${{ steps.v.outputs.version }}
+
+      - name: Package
+        run: |
+          mkdir -p artifacts
+          cd publish
+          zip -j "../artifacts/${{ steps.v.outputs.zip }}" Jellyfin.Plugin.Tagsmith.dll
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.v.outputs.version }}" \
+            "artifacts/${{ steps.v.outputs.zip }}" \
+            --title "v${{ steps.v.outputs.version }}" \
+            --notes "${{ inputs.changelog }}"
+
+      - name: Update manifest
+        run: |
+          ./scripts/update-manifest.sh \
+            "${{ steps.v.outputs.version }}" \
+            "artifacts/${{ steps.v.outputs.zip }}" \
+            "${{ github.server_url }}/${{ github.repository }}/releases/download/v${{ steps.v.outputs.version }}/${{ steps.v.outputs.zip }}" \
+            "${{ inputs.changelog }}"
+
+      - name: Commit manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "Publish ${{ steps.v.outputs.version }}"
+          git push

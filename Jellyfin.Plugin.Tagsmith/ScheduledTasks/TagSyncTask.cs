@@ -71,8 +71,14 @@ public class TagSyncTask : IScheduledTask
 
     /// <inheritdoc />
     /// <remarks>
-    /// No default trigger — schedule it from Dashboard &gt; Scheduled Tasks. Hooking
-    /// library-scan completion directly is a later enhancement.
+    /// Runs nightly by default; the schedule is editable in Dashboard &gt; Scheduled Tasks.
     /// </remarks>
-    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() =>
+    [
+        new TaskTriggerInfo
+        {
+            Type = TaskTriggerInfoType.DailyTrigger,
+            TimeOfDayTicks = TimeSpan.FromHours(4).Ticks
+        }
+    ];
 }

@@ -52,9 +52,4 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether changes are logged but not saved.
     /// </summary>
     public bool DryRun { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether every item is reprocessed on the next run.
-    /// </summary>
-    public bool ForceFullRescan { get; set; }
 }

@@ -56,16 +56,23 @@
                         <span>Dry run (log changes only)</span>
                     </label>
 
-                    <label class="checkboxContainer">
-                        <input is="emby-checkbox" type="checkbox" id="ForceFullRescan" />
-                        <span>Reprocess every item on the next run</span>
-                    </label>
                 </div>
 
                 <button is="emby-button" type="submit" class="raised button-submit block">
                     <span>Save</span>
                 </button>
             </form>
+
+            <div class="verticalSection">
+                <h2 class="sectionTitle">Rescan</h2>
+                <button is="emby-button" type="button" id="TagsmithRescan" class="raised block">
+                    <span>Rescan library now</span>
+                </button>
+                <div class="fieldDescription">
+                    Starts the <em>Sync Tagsmith tags</em> scheduled task immediately. Save your
+                    settings first. Progress is shown in Dashboard &gt; Scheduled Tasks.
+                </div>
+            </div>
         </div>
     </div>
 
@@ -73,7 +80,8 @@
         (function () {
             var pluginId = '4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84';
             var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'YearNamespace'];
-            var boolFields = ['EnableOrigin', 'EnableLanguage', 'EnableYear', 'RemoveObsoleteTags', 'DryRun', 'ForceFullRescan'];
+            var boolFields = ['EnableOrigin', 'EnableLanguage', 'EnableYear', 'RemoveObsoleteTags', 'DryRun'];
+            var taskKey = 'TagsmithSync';
 
             document.querySelector('#TagsmithConfigPage').addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();
@@ -103,6 +111,29 @@
                     });
                 });
                 return false;
+            });
+
+            document.querySelector('#TagsmithRescan').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getJSON(ApiClient.getUrl('ScheduledTasks')).then(function (tasks) {
+                    var task = tasks.filter(function (t) { return t.Key === taskKey; })[0];
+                    if (!task) {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert('Tagsmith scheduled task not found. Restart the server.');
+                        return;
+                    }
+
+                    return ApiClient.ajax({
+                        type: 'POST',
+                        url: ApiClient.getUrl('ScheduledTasks/Running/' + task.Id)
+                    }).then(function () {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert('Tagsmith rescan started.');
+                    });
+                }).catch(function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not start the Tagsmith rescan.');
+                });
             });
         })();
     </script>

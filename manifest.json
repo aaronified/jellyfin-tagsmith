@@ -1,0 +1,12 @@
+[
+  {
+    "guid": "4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84",
+    "name": "Tagsmith",
+    "description": "Derives searchable, machine-readable tags (origin=, lang=, year= ...) from metadata Jellyfin already holds, and keeps them in sync as the library changes.",
+    "overview": "Automatic namespaced metadata tags for Jellyfin.",
+    "owner": "aaronified",
+    "category": "Metadata",
+    "imageUrl": "",
+    "versions": []
+  }
+]

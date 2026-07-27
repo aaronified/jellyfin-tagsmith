@@ -49,7 +49,23 @@ Jellyfin.Plugin.Tagsmith/
 Implement `ITagProvider`, declare the namespaces it owns, and register it in
 `PluginServiceRegistrator`. `TagSynchronizer` handles merging and pruning.
 
-## Build
+## Install and update
+
+Add this repository once, in Dashboard → Plugins → Repositories:
+
+```
+https://raw.githubusercontent.com/aaronified/jellyfin-tagsmith/main/manifest.json
+```
+
+Tagsmith then appears in the plugin catalogue, and later versions show an **Update**
+button in the dashboard — no file copying between test runs.
+
+Publishing a new version: run the **Release** workflow in GitHub Actions with a version
+number. It builds, attaches a zip to a GitHub release, and appends the entry (with md5
+checksum) to `manifest.json`. Bump `targetAbi` in `build.yaml` when you move to a new
+server version.
+
+## Build locally
 
 ```bash
 dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o artifacts
@@ -63,11 +79,12 @@ or the plugin loads as `NotSupported`.
 
 ## Run it
 
-Dashboard → Plugins → Tagsmith to configure, then Dashboard → Scheduled Tasks →
-**Sync Tagsmith tags**. Turn on dry run first to see what would change in the logs.
+Dashboard → Tagsmith (or Plugins → Tagsmith) to configure, then either hit **Rescan
+library now** on that page or wait for the nightly 04:00 run. Progress appears under
+Dashboard → Scheduled Tasks. Turn on dry run first to see what would change in the logs.
 
 ## Known gaps
 
-- No default schedule trigger; hooking library-scan completion is a TODO.
 - `original_lang=` needs an external provider (v1.1) — Jellyfin doesn't store it.
-- `ForceFullRescan` is in config but not yet honoured (the task is a full pass anyway).
+- No per-item trigger; the plugin assumes the web UI isn't used on client devices, so
+  tagging happens on the schedule or on demand from the settings page.
