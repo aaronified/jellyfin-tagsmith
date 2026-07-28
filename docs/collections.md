@@ -1,6 +1,6 @@
 # Collections projection
 
-**Status: implemented in 0.0.3, revised in 0.0.4 and again in 0.0.5, off by default. The
+**Status: implemented in 0.0.3, revised in 0.0.4, 0.0.5 and 0.0.6, off by default. The
 rendering of a plugin-created collections library has not yet been confirmed on a live
 server — enable one namespace first.**
 
@@ -101,9 +101,10 @@ existing box set id and are the same calls the web UI makes. Two reasons:
 ## Dry run
 
 *Dry run* covers the projection, not just tagging. With it on, Tagsmith creates no
-libraries, no collections and no files, deletes nothing, applies no artwork, and does not
-write configuration — including the projection-disabled decision below. It logs each
-action it would have taken, prefixed `[dry-run]`.
+libraries, no collections and no files, deletes nothing, neither applies nor adopts artwork,
+and does not write configuration — including the projection-disabled decision below. It logs
+each action it would have taken, prefixed `[dry-run]`. The adoption listener honours it too,
+so a poster set while dry run is on is logged and not copied.
 
 ## What the user sees
 
@@ -175,19 +176,61 @@ extensions: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`.
 
 ### The folder is the source of truth, in both directions
 
+Artwork moves both ways, but never in the same operation. Three triggers, one job each:
+
+| Trigger | What it does about artwork |
+| --- | --- |
+| **Sync Tagsmith tags** (scheduled, nightly at 04:00) | Applies the file in the thumbnails folder to the collections **it created in that run**, and to nothing else. Never adopts |
+| **A poster changing on a collection** (event) | Adopts it into the thumbnails folder immediately |
+| **Reapply collection artwork** (button) | Forces the folder onto **every** collection Tagsmith owns, discarding posters set by hand |
+
 Set a poster by hand on a collection in the library UI and Tagsmith **adopts** it: the
 image is copied into `<config>/tagsmith/thumbnails/<namespace>/` as the stored artwork for
 that value, replacing whatever was there. From then on it is an ordinary file you can back
 up, edit or delete, and it survives the collection being rebuilt or the library being torn
 down and recreated.
 
-Otherwise the file in the folder is applied to the collection.
+Adoption is driven by `ILibraryManager.ItemUpdated`, so it happens the moment the poster is
+set rather than at the next nightly run. That matters both ways round: the backup is
+immediate, and the heavy library-wide pass no longer has to hash a poster per collection to
+find out whether anything changed. The listener ignores every item whose id is not in
+`ManagedCollections`, which is nearly all of them.
 
-Each direction is guarded by a hash, so a run with nothing changed writes nothing. Two
-hashes are kept per value, not one: the artwork file in the thumbnails folder, and the
-image that actually landed on the collection. They differ because the server re-encodes on
-save, and conflating them meant Tagsmith read its own poster as user intent and copied it
-back over the source file.
+Once a collection exists, the nightly run does not touch its artwork at all. Change the
+image in the thumbnails folder and nothing happens until you press **Reapply collection
+artwork**; that is the only trigger that reads the folder for a collection that already
+exists.
+
+The table above is `ArtworkPolicy.Decide`, one function, so the "no overlap" claim is a
+test rather than a reading of three call sites.
+
+#### Why it cannot loop
+
+Applying artwork writes to the collection, and writing to the collection is exactly the
+thing the listener watches for. Two guards, and both have to fail:
+
+- Adoption **only ever writes into the thumbnails folder**. It never touches the collection,
+  so it raises no item update and cannot re-trigger itself. The two directions cannot
+  ping-pong; at most one image update exists per apply.
+- Each direction is guarded by a hash, so a run with nothing changed writes nothing. Two
+  hashes are kept per value, not one: the artwork file in the thumbnails folder, and the
+  image that actually landed on the collection. They differ because the server re-encodes on
+  save, and conflating them meant Tagsmith read its own poster as user intent and copied it
+  back over the source file.
+
+The hash of what landed is only recorded *after* the save returns, so there is a window in
+which Tagsmith's own poster is on the collection and the record does not yet say so. The
+projector marks the box set id before it writes anything and unmarks it in the same step
+that records the hash, both under the lock the listener reads and decides under. So the
+listener sees one of three states and never a state in between: before the apply, where the
+poster it adopts really is the user's; during it, where the mark is present and it stands
+off; or after it, where the hash says the poster is Tagsmith's. The lock is not held across
+the image save itself, so nothing can wedge if a future server version raises the event from
+inside it.
+
+That is also why the handler does its work inline on Jellyfin's thread rather than queueing
+it: work resumed on a worker would run after the lock had been released and the mark
+dropped, which is exactly the state the guard exists to exclude.
 
 One value never accumulates two files: adopting `india.jpg` removes an existing
 `india.png`.
@@ -204,6 +247,8 @@ On each run:
 | --- | --- |
 | Namespace enabled, library missing | Create it |
 | Namespace enabled, library exists | Reconcile its collections |
+| Collection created in this run | Apply its artwork from the thumbnails folder |
+| Collection already existed | Reconcile membership only. Its artwork is not read, written or hashed — see [Images](#images) |
 | **Wanted library name already taken by a library Tagsmith does not own** | Refuse. Log an error and skip the projection — never adopt |
 | Library renamed in Jellyfin's own settings | Follow the rename. Ownership is by id, so this is not a deletion |
 | Library name changed in *Tagsmith's* settings | Tear down and rebuild — Jellyfin 10.11 exposes no rename on `ILibraryManager` |
@@ -263,7 +308,31 @@ await collections.AddToCollectionAsync(boxSetId, itemIds);
 await collections.RemoveFromCollectionAsync(boxSetId, itemIds);
 
 library.DeleteItem(boxSet, new DeleteOptions { DeleteFileLocation = true }, notifyParentItem: true);
+
+// Adoption. ItemChangeEventArgs carries Item, Parent and UpdateReason. Subscribed and
+// unsubscribed by an IHostedService registered in PluginServiceRegistrator; plugin
+// registrators feed the generic host's service collection, so AddHostedService is started
+// and stopped with the server.
+library.ItemUpdated += (sender, e) => { … };
+
+// ItemUpdateType is [Flags] and one update carries several reasons, so this is a mask. Note
+// the server declares None = 1, not 0.
+(e.UpdateReason & ItemUpdateType.ImageUpdate) != 0
 ```
+
+`LibraryManager.UpdateItemsAsync` invokes `ItemUpdated` inline, on the calling thread, after
+`SaveItems`. The handler therefore runs inside whatever operation caused the change, which is
+why the adoption handler does its work synchronously and stays small: queueing it to a worker
+would let it outlive the projector's "currently applying" marker, which is the thing that
+stops it copying Tagsmith's own poster back over the user's file.
+
+**`ProviderManager.SaveImage(item, stream, …)` does not write to the database.** In 10.11.11
+`ImageSaver.SaveImage` writes the file and calls `BaseItem.SetImagePath`, which mutates
+`ImageInfos` in memory and nothing else; `ImageController.SetItemImage` follows it with
+`item.UpdateToRepositoryAsync(ItemUpdateType.ImageUpdate, …)` and that is what both persists
+the image and raises the event. Tagsmith does not make that second call, so applied artwork is
+not persisted and Tagsmith's own applies do not raise `ItemUpdated` directly — though a
+refresh queued elsewhere still can, which is why the loop guard does not depend on that.
 
 **`CollectionCreationOptions.ParentId` compiles but is ignored.** Do not reintroduce it.
 `CollectionManager.CreateCollectionAsync` never reads it:

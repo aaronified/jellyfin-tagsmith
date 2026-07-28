@@ -57,13 +57,16 @@ cards, decade cards — lives in [assets/thumbnails](assets/thumbnails). Copy th
 want into `<config>/tagsmith/thumbnails/<namespace>/`, named after the tag value; case and
 separators do not matter.
 
-It works both ways: set a poster by hand on a collection and Tagsmith copies it into that
-folder as the stored artwork for the value, so it survives the collection being rebuilt.
+It works both ways, but the two directions are separate triggers. The nightly run applies
+artwork only to collections it creates in that run. Set a poster by hand on a collection and
+Tagsmith copies it into the folder straight away — it watches for the change rather than
+waiting for the next run — so it survives the collection being rebuilt.
 
-**Reapply collection artwork** on the settings page overrides that. It pushes the image in
-the thumbnails folder onto every projected collection, replacing posters set by hand —
-useful after dropping in a new set of images, or to undo an adoption. Collections with no
-matching file keep what they have.
+Change an image in the folder afterwards and nothing happens on its own. **Reapply
+collection artwork** on the settings page is the trigger for that: it pushes the image in the
+thumbnails folder onto every projected collection, replacing posters set by hand — useful
+after dropping in a new set of images, or to undo an adoption. Collections with no matching
+file keep what they have.
 
 ## Layout
 
@@ -85,11 +88,14 @@ Jellyfin.Plugin.Tagsmith/
     LibraryOwnership.cs          which libraries are Tagsmith's, and what to do about them
     MemberDiff.cs                collection membership diffing
     ThumbnailLocator.cs          user artwork lookup
+    ArtworkPolicy.cs             which trigger does what about artwork
+    PosterAdoptionListener.cs    backs a hand-set poster up the moment it is set
     CollectionProjector.cs       library and collection reconciliation
   Providers/
     CoreMetadataTagProvider.cs   core provider, no network
   ScheduledTasks/
-    TagSyncTask.cs               full-library pass, then projection
+    TagSyncTask.cs               full-library pass, then projection; nightly at 04:00
+    ReapplyArtworkTask.cs        the reapply button, forces folder -> collections
 assets/thumbnails/               starter artwork, downloaded separately
 scripts/                         CLDR and artwork generators, manifest updater
 tests/                           xunit suite
@@ -137,7 +143,7 @@ dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o artifacts
 ```
 
 Copy `artifacts/Jellyfin.Plugin.Tagsmith.dll` into
-`<jellyfin-config>/plugins/Tagsmith_0.0.5/` and restart the server.
+`<jellyfin-config>/plugins/Tagsmith_0.0.6/` and restart the server.
 
 The `Jellyfin.Controller` package version in the csproj must match the server version,
 or the plugin loads as `NotSupported`.
@@ -155,8 +161,9 @@ MIT — see [LICENSE](LICENSE).
 ## Known gaps
 
 - `original_lang=` needs an external provider — Jellyfin doesn't store it.
-- No per-item trigger; the plugin assumes the web UI isn't used on client devices, so
-  tagging happens on the schedule or on demand from the settings page.
+- No per-item trigger for **tagging**; the plugin assumes the web UI isn't used on client
+  devices, so tagging happens on the schedule or on demand from the settings page. Only
+  collection artwork reacts to a live change.
 - Renaming a projection's library **in Tagsmith's settings** tears the old one down and
   rebuilds it, since Jellyfin 10.11 exposes no rename on `ILibraryManager`. Collections are
   regenerated, but per-user access grants are not. Renaming it in Jellyfin's own dashboard
