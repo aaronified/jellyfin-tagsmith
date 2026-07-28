@@ -106,6 +106,69 @@ public class CollectionProjector
         }
     }
 
+    /// <summary>
+    /// Applies the artwork in the thumbnails folder to every collection Tagsmith owns,
+    /// replacing whatever poster is on them.
+    /// </summary>
+    /// <remarks>
+    /// The scheduled run deliberately treats a poster it did not apply as the user's choice
+    /// and adopts it. This is the escape hatch for when that is not what you wanted — after
+    /// dropping in a new set of images, or after an adoption you would rather undo. It reads
+    /// the folder only; collections with no matching file keep what they have.
+    /// </remarks>
+    public Task ReapplyArtworkAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var configuration = Plugin.Instance?.Configuration;
+        if (configuration is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var run = new Run
+        {
+            Configuration = configuration,
+            DryRun = configuration.DryRun,
+            Thumbnails = new ThumbnailLocator(_paths.ProgramDataPath),
+            ForceArtwork = true
+        };
+
+        var records = configuration.ManagedCollections;
+        if (records.Length == 0)
+        {
+            _logger.LogInformation("Tagsmith: no projected collections to apply artwork to");
+            return Task.CompletedTask;
+        }
+
+        _logger.LogInformation(
+            "Tagsmith: reapplying artwork from {Folder} to {Count} collections",
+            run.Thumbnails.Root,
+            records.Length);
+
+        try
+        {
+            for (var i = 0; i < records.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var record = records[i];
+                var boxSet = Resolve(record);
+
+                if (boxSet is not null)
+                {
+                    SyncArtwork(record, boxSet, TagGrouping.NamespaceFor(record.Kind, configuration), run);
+                }
+
+                progress?.Report(100.0 * (i + 1) / records.Length);
+            }
+        }
+        finally
+        {
+            Persist(run);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private async Task ProjectKindAsync(
         ProjectionKind kind,
         IReadOnlyList<BaseItem> items,
@@ -464,7 +527,9 @@ public class CollectionProjector
     /// </remarks>
     private void SyncArtwork(ManagedCollection record, BaseItem boxSet, string tagNamespace, Run run)
     {
-        if (CaptureManualPoster(record, boxSet, tagNamespace, run))
+        // Forcing skips adoption deliberately: the whole point of the action is to discard
+        // whatever poster is on the collection in favour of the file on disk.
+        if (!run.ForceArtwork && CaptureManualPoster(record, boxSet, tagNamespace, run))
         {
             return;
         }
@@ -476,7 +541,7 @@ public class CollectionProjector
         }
 
         var hash = ThumbnailLocator.Hash(file);
-        if (string.Equals(record.ImageHash, hash, StringComparison.Ordinal))
+        if (!run.ForceArtwork && string.Equals(record.ImageHash, hash, StringComparison.Ordinal))
         {
             return;
         }
@@ -1183,6 +1248,13 @@ public class CollectionProjector
         public required bool DryRun { get; init; }
 
         public required ThumbnailLocator Thumbnails { get; init; }
+
+        /// <summary>
+        /// Gets a value indicating whether artwork in the thumbnails folder is applied
+        /// regardless of what is currently on the collection. Set only by the explicit
+        /// "reapply artwork" action, never by a scheduled run.
+        /// </summary>
+        public bool ForceArtwork { get; init; }
 
         public bool Dirty { get; set; }
     }

@@ -60,6 +60,11 @@ separators do not matter.
 It works both ways: set a poster by hand on a collection and Tagsmith copies it into that
 folder as the stored artwork for the value, so it survives the collection being rebuilt.
 
+**Reapply collection artwork** on the settings page overrides that. It pushes the image in
+the thumbnails folder onto every projected collection, replacing posters set by hand —
+useful after dropping in a new set of images, or to undo an adoption. Collections with no
+matching file keep what they have.
+
 ## Layout
 
 ```

@@ -173,6 +173,17 @@
                     Starts the <em>Sync Tagsmith tags</em> scheduled task immediately. Save your
                     settings first. Progress is shown in Dashboard &gt; Scheduled Tasks.
                 </div>
+
+                <button is="emby-button" type="button" id="TagsmithReapplyArtwork"
+                        class="raised block" style="margin-top:1em;">
+                    <span>Reapply collection artwork</span>
+                </button>
+                <div class="fieldDescription">
+                    Replaces the poster on every projected collection with the matching image
+                    from <code>&lt;config&gt;/tagsmith/thumbnails/&lt;namespace&gt;/</code>,
+                    overwriting posters set by hand. Collections with no matching file keep what
+                    they have. Use this after dropping in a new set of images.
+                </div>
             </div>
         </div>
     </div>
@@ -187,6 +198,7 @@
                 'ProjectOrigin', 'ProjectLanguage', 'ProjectYear', 'RemoveCollectionsWhenDisabled'];
             var listFields = ['Aliases', 'KnownPrefixes'];
             var taskKey = 'TagsmithSync';
+            var artworkTaskKey = 'TagsmithReapplyArtwork';
 
             function toLines(value) {
                 return (value || []).join('\n');
@@ -234,10 +246,10 @@
                 return false;
             });
 
-            document.querySelector('#TagsmithRescan').addEventListener('click', function () {
+            function startTask(key, started, failed) {
                 Dashboard.showLoadingMsg();
                 ApiClient.getJSON(ApiClient.getUrl('ScheduledTasks')).then(function (tasks) {
-                    var task = tasks.filter(function (t) { return t.Key === taskKey; })[0];
+                    var task = tasks.filter(function (t) { return t.Key === key; })[0];
                     if (!task) {
                         Dashboard.hideLoadingMsg();
                         Dashboard.alert('Tagsmith scheduled task not found. Restart the server.');
@@ -249,12 +261,23 @@
                         url: ApiClient.getUrl('ScheduledTasks/Running/' + task.Id)
                     }).then(function () {
                         Dashboard.hideLoadingMsg();
-                        Dashboard.alert('Tagsmith rescan started.');
+                        Dashboard.alert(started);
                     });
                 }).catch(function () {
                     Dashboard.hideLoadingMsg();
-                    Dashboard.alert('Could not start the Tagsmith rescan.');
+                    Dashboard.alert(failed);
                 });
+            }
+
+            document.querySelector('#TagsmithRescan').addEventListener('click', function () {
+                startTask(taskKey, 'Tagsmith rescan started.', 'Could not start the Tagsmith rescan.');
+            });
+
+            document.querySelector('#TagsmithReapplyArtwork').addEventListener('click', function () {
+                startTask(
+                    artworkTaskKey,
+                    'Reapplying collection artwork.',
+                    'Could not start the artwork reapply.');
             });
         })();
     </script>
