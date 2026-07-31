@@ -39,10 +39,28 @@
 
                     <label class="checkboxContainer">
                         <input is="emby-checkbox" type="checkbox" id="EnableLanguage" />
-                        <span>Tag audio languages</span>
+                        <span>Tag original language</span>
                     </label>
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="LanguageNamespace" label="Language namespace" />
+                    </div>
+                    <div class="fieldDescription">
+                        The language the film or show was made in, from TMDb/TVDb — a Bengali
+                        film tags <code>lang=bengali</code> even when your file carries only a
+                        Hindi dub. Items no external source knows fall back to the audio-track
+                        languages on the files.
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="EnableAudioLanguage" />
+                        <span>Tag audio-track languages</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="AudioLanguageNamespace" label="Audio language namespace" />
+                    </div>
+                    <div class="fieldDescription">
+                        One tag per language actually present on the media files, e.g. a dub.
+                        For a series the first episodes are sampled.
                     </div>
 
                     <label class="checkboxContainer">
@@ -51,6 +69,22 @@
                     </label>
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="YearNamespace" label="Year namespace" />
+                    </div>
+                </div>
+
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">External metadata</h2>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="UseExternalMetadata" />
+                        <span>Use TMDb/TVDb as the primary source for origin and language</span>
+                    </label>
+                    <div class="fieldDescription">
+                        TMDb is built into the server and needs nothing installed.
+                        <strong>TVDb lookups need the official TheTVDB plugin</strong> (in the
+                        default catalogue); without it, series matched only by a TVDb id are
+                        resolved through TMDb where possible. Items unknown to both fall back
+                        to Jellyfin's own metadata, as does everything when this is off.
                     </div>
                 </div>
 
@@ -194,10 +228,10 @@
     <script type="text/javascript">
         (function () {
             var pluginId = '4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84';
-            var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'YearNamespace',
-                'OriginLibraryName', 'LanguageLibraryName', 'YearLibraryName'];
-            var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableYear',
-                'RemoveObsoleteTags', 'DryRun',
+            var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'AudioLanguageNamespace',
+                'YearNamespace', 'OriginLibraryName', 'LanguageLibraryName', 'YearLibraryName'];
+            var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableAudioLanguage',
+                'EnableYear', 'UseExternalMetadata', 'RemoveObsoleteTags', 'DryRun',
                 'ProjectOrigin', 'ProjectLanguage', 'ProjectYear', 'RemoveCollectionsWhenDisabled'];
             var listFields = ['Aliases', 'KnownPrefixes'];
             var taskKey = 'TagsmithSync';

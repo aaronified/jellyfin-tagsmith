@@ -66,9 +66,17 @@ const record = (alias, target) => {
   bucket.add(target);
 };
 
+// ISO codes are unambiguous by definition, so they bypass the collision handling below:
+// RU must resolve to Russia even though Catalan renders the UK's short name as "RU", and
+// NGA to Nigeria even though "Nga" is Vietnamese for Russia. This matters since TMDb's
+// origin_country and TVDb's OriginalCountry are bare codes, not names.
+const isoCodes = new Map();
+
 for (const { code, alpha3 } of territories) {
   const target = canonical.get(code);
   if (!target) continue;
+  isoCodes.set(slug(code), target);
+  isoCodes.set(slug(alpha3), target);
   record(slug(code), target);
   record(slug(alpha3), target);
   record(target, target);
@@ -118,7 +126,14 @@ const map = {};
 let ambiguous = 0;
 
 for (const [alias, targets] of [...candidates.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
-  if (targets.size === 1) {
+  if (isoCodes.has(alias)) {
+    // An ISO code wins its own country outright. Without this, six alpha-2 codes and one
+    // alpha-3 (AO AS BI KM RU SA, NGA) collided with some locale's display name for a
+    // different country and were dropped as ambiguous — so a Russian series coming from
+    // TMDb as "RU" tagged origin=ru while a Russian film tagged origin=russia.
+    map[alias] = isoCodes.get(alias);
+    if (targets.size > 1) ambiguous++;
+  } else if (targets.size === 1) {
     map[alias] = [...targets][0];
   } else if (targets.has(alias)) {
     // A canonical name that also reads as an alias of something else wins for itself.

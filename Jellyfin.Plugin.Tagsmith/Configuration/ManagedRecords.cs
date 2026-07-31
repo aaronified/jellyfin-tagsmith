@@ -13,7 +13,7 @@ public enum ProjectionKind
     /// <summary>Production countries.</summary>
     Origin,
 
-    /// <summary>Audio languages.</summary>
+    /// <summary>Languages, from the language namespace's tags.</summary>
     Language,
 
     /// <summary>Release years, grouped by decade.</summary>

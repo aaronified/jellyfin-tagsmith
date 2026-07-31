@@ -17,6 +17,19 @@ public class CountryAliasCatalogTests
     // ISO codes.
     [InlineData("IND", "india")]
     [InlineData("DEU", "germany")]
+    // ISO codes that collide with some locale's display name for a different country used
+    // to be dropped as ambiguous, tagging origin=ru while a film from the same country
+    // tagged origin=russia. A code is unambiguous by definition and wins its own country.
+    // These are the load-bearing path for TMDb origin_country and TVDb OriginalCountry.
+    [InlineData("RU", "russia")]
+    [InlineData("NGA", "nigeria")]
+    [InlineData("AO", "angola")]
+    [InlineData("AS", "american_samoa")]
+    [InlineData("BI", "burundi")]
+    [InlineData("KM", "comoros")]
+    [InlineData("SA", "saudi_arabia")]
+    [InlineData("IN", "india")]
+    [InlineData("usa", "united_states")]   // TVDb sends lowercase alpha-3
     // Endonyms and other languages.
     [InlineData("Deutschland", "germany")]
     [InlineData("Allemagne", "germany")]

@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.Tagsmith.Collections;
+using Jellyfin.Plugin.Tagsmith.External;
 using Jellyfin.Plugin.Tagsmith.Providers;
 using Jellyfin.Plugin.Tagsmith.Tagging;
 using MediaBrowser.Controller;
@@ -15,6 +16,12 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
+        // External databases, consulted in registration order: TMDb answers first, TVDb
+        // fills the gaps. Both reach the respective client by reflection and fail soft to
+        // "unavailable" when the server or plugin surface moves.
+        serviceCollection.AddSingleton<IExternalMetadataSource, TmdbMetadataSource>();
+        serviceCollection.AddSingleton<IExternalMetadataSource, TvdbMetadataSource>();
+
         // Add further ITagProvider implementations here; all registered providers run for
         // every item and their tags are unioned.
         serviceCollection.AddSingleton<ITagProvider, CoreMetadataTagProvider>();

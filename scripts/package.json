@@ -19,8 +19,8 @@
     "@fontsource/noto-sans-tamil": "^5.3.0",
     "@fontsource/noto-sans-telugu": "^5.3.0",
     "@napi-rs/canvas": "^0.1.100",
-    "cldr-core": "^46.0.0",
-    "cldr-localenames-modern": "^46.0.0",
+    "cldr-core": "~45.0.0",
+    "cldr-localenames-modern": "~45.0.0",
     "flag-icons": "^7.5.0",
     "sharp": "^0.34.5"
   }

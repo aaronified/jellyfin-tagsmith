@@ -29,14 +29,40 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CanonicaliseCountries { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether audio-language tags are written.
+    /// Gets or sets a value indicating whether language tags are written. The value is the
+    /// item's <em>original</em> language — the language the film or show was made in — from
+    /// TMDb/TVDb when external metadata is on, falling back to the audio streams on the
+    /// files when no external source knows the item.
     /// </summary>
     public bool EnableLanguage { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the namespace used for audio languages.
+    /// Gets or sets the namespace used for the original language.
     /// </summary>
     public string LanguageNamespace { get; set; } = "lang";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether audio-track language tags are written —
+    /// one per language actually present on the media files. Off by default; the original
+    /// language above is what most libraries want to browse by.
+    /// </summary>
+    public bool EnableAudioLanguage { get; set; }
+
+    /// <summary>
+    /// Gets or sets the namespace used for audio-track languages.
+    /// </summary>
+    public string AudioLanguageNamespace { get; set; } = "audio_lang";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether origin and language are looked up in TMDb
+    /// and TVDb first, with Jellyfin's own metadata as the fallback.
+    /// </summary>
+    /// <remarks>
+    /// TMDb is reached through the server's built-in client. TVDb needs the official
+    /// TheTVDB plugin installed; without it, series matched only by a TVDb id are bridged
+    /// through TMDb where possible and otherwise fall back to Jellyfin metadata.
+    /// </remarks>
+    public bool UseExternalMetadata { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether release-year tags are written.
@@ -72,7 +98,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool ProjectOrigin { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether audio languages are projected.
+    /// Gets or sets a value indicating whether languages are projected.
     /// </summary>
     public bool ProjectLanguage { get; set; }
 
