@@ -847,11 +847,26 @@ public class CollectionProjector
 
     private async Task TearDownAsync(ProjectionKind kind, Run run, CancellationToken cancellationToken)
     {
-        var configuration = run.Configuration;
-        if (!configuration.RemoveCollectionsWhenDisabled)
+        if (!run.Configuration.RemoveCollectionsWhenDisabled)
         {
             return;
         }
+
+        await TearDownKindAsync(kind, run, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Removes everything one projection created: its collections, its library and its
+    /// box-set folders. <b>Media is never touched.</b> Collections are database items plus
+    /// a <c>collection.xml</c> folder under Tagsmith's own per-projection directory —
+    /// members are linked children, so deleting a box set deletes the link, not the film —
+    /// and removing a virtual folder removes the library definition, not the files it
+    /// pointed at. Tags are not touched either; if the projection stays enabled, the next
+    /// sync rebuilds everything from them.
+    /// </summary>
+    private async Task TearDownKindAsync(ProjectionKind kind, Run run, CancellationToken cancellationToken)
+    {
+        var configuration = run.Configuration;
 
         var owned = configuration.ManagedCollections.Count(c => c.Kind == kind);
         var library = configuration.ManagedLibraries.FirstOrDefault(l => l.Kind == kind);
@@ -876,10 +891,77 @@ public class CollectionProjector
             await RemoveLibraryAsync(library, run).ConfigureAwait(false);
         }
 
-        SweepBoxSetFolders(kind);
-        RemoveMediaDirectory(kind);
+        try
+        {
+            SweepBoxSetFolders(kind);
+            RemoveMediaDirectory(kind);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The library is already gone by this point. Failing here must not skip the
+            // Forget below — a stale library record reads as "deleted outside the plugin"
+            // on the next sync, which silently disables the projection the user meant to
+            // keep. Leftover folders are re-swept by the next teardown.
+            _logger.LogWarning(ex, "Tagsmith: could not sweep the {Kind} projection's folders", kind);
+        }
+
         Forget(kind, run);
         _logger.LogInformation("Tagsmith: tore down the {Kind} projection", kind);
+    }
+
+    /// <summary>
+    /// The <em>Delete projected collections</em> action: tears down every projection —
+    /// collections, libraries, box-set folders and the bookkeeping — whatever the
+    /// <c>RemoveCollectionsWhenDisabled</c> setting says. Media files and items are never
+    /// touched (see <see cref="TearDownKindAsync"/>), and tags are left exactly as they
+    /// are, so projections that remain enabled rebuild on the next sync.
+    /// </summary>
+    public async Task TearDownAllAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        await Task.Yield();
+
+        var configuration = Plugin.Instance?.Configuration;
+        if (configuration is null)
+        {
+            return;
+        }
+
+        var run = new Run
+        {
+            Configuration = configuration,
+            DryRun = configuration.DryRun,
+            Pass = new ArtworkPass
+            {
+                Thumbnails = _artwork.ResolveThumbnails(),
+                DryRun = configuration.DryRun
+            },
+
+            // The teardown never calls the artwork synchroniser at all; the mode is inert
+            // and set only because Run requires one.
+            Artwork = ArtworkMode.AdoptOnly
+        };
+
+        _logger.LogInformation(
+            "Tagsmith: {Prefix}deleting all projected collections — {Collections} collections across {Libraries} libraries",
+            run.DryRun ? "[dry-run] " : string.Empty,
+            configuration.ManagedCollections.Length,
+            configuration.ManagedLibraries.Length);
+
+        try
+        {
+            var kinds = Enum.GetValues<ProjectionKind>();
+
+            for (var i = 0; i < kinds.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await TearDownKindAsync(kinds[i], run, cancellationToken).ConfigureAwait(false);
+                progress?.Report(100.0 * (i + 1) / kinds.Length);
+            }
+        }
+        finally
+        {
+            Persist(run);
+        }
     }
 
     // ---------------------------------------------------------------- collections
@@ -1029,7 +1111,29 @@ public class CollectionProjector
             // DeleteFileLocation: true. The box set folder is Tagsmith's own creation under
             // its own directory, and leaving it behind would make the collection reappear on
             // the next scan.
-            _libraryManager.DeleteItem(boxSet, new DeleteOptions { DeleteFileLocation = true }, true);
+            //
+            // Fenced on the path all the same: a box set outside the server's data
+            // directory is a "legacy" box set to Jellyfin, whose real, on-disk children
+            // would be enumerated and recursively deleted with it. No record Tagsmith
+            // writes can point at one, but this is the single call that deletes files and
+            // database rows in one stroke, and it must not trust a hand-edited or restored
+            // configuration file. Media must never be deletable from here.
+            var deleteFiles = !string.IsNullOrEmpty(boxSet.Path)
+                              && Path.GetFullPath(boxSet.Path)
+                                  .StartsWith(
+                                      Path.GetFullPath(_paths.DataPath) + Path.DirectorySeparatorChar,
+                                      StringComparison.OrdinalIgnoreCase);
+
+            if (!deleteFiles)
+            {
+                _logger.LogWarning(
+                    "Tagsmith: the collection {Name} sits outside the data directory at {Path}; "
+                    + "removing the database item only and leaving the folder alone",
+                    boxSet.Name,
+                    boxSet.Path);
+            }
+
+            _libraryManager.DeleteItem(boxSet, new DeleteOptions { DeleteFileLocation = deleteFiles }, true);
             return;
         }
 

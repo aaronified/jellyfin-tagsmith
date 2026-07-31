@@ -24,4 +24,10 @@ public class ScheduledTaskTriggerTests
     public void The_reapply_artwork_task_only_runs_when_asked() =>
         // It replaces posters set by hand, so nothing may start it but the button.
         Assert.Empty(new ReapplyArtworkTask(null!).GetDefaultTriggers());
+
+    [Fact]
+    public void The_delete_collections_task_only_runs_when_asked() =>
+        // It tears down every projection; a schedule that ran it on its own would delete
+        // and rebuild the user's libraries nightly.
+        Assert.Empty(new DeleteCollectionsTask(null!).GetDefaultTriggers());
 }

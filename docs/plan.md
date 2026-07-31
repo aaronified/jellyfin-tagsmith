@@ -19,14 +19,18 @@ from metadata and trusted external sources.
   Namespace          Example
   ------------------ -------------------------------
   `origin=`          `origin=india`
-  `lang=`            `lang=bengali`
-  `original_lang=`   `original_lang=japanese`
+  `lang=`            `lang=bengali` (original language)
+  `audio_lang=`      `audio_lang=hindi` (tracks on the files)
   `year=`            `year=1954`
   `award=`           `award=oscar:best_picture`
   `nomination=`      `nomination=bafta:best_actor`
   `list=`            `list=imdb_top_250`
 
-## MVP (v1.0)
+The `original_lang=` namespace from earlier drafts was folded into `lang=`: the original
+language is what a Languages library wants to browse by, and the audio tracks became
+their own optional namespace instead.
+
+## MVP (v1.0) — shipped
 
 ### Metadata already available
 
@@ -42,43 +46,43 @@ from metadata and trusted external sources.
 -   Configurable prefixes.
 -   Process movies and TV shows.
 
-## v1.1
+## v1.1 — shipped in 0.1.0
 
-Support external enrichment:
+External enrichment, no API keys required:
 
--   TMDb
--   TVDb
--   IMDb
+-   TMDb, through the server's built-in client — origin and original language become
+    external-first with Jellyfin metadata as the fallback.
+-   TVDb, through the official TheTVDB plugin when installed; TVDb-only series bridge
+    through TMDb's find endpoint otherwise.
+-   IMDb ids are the join key for the award and list datasets below; IMDb itself exposes
+    no metadata API.
 
-User supplies API keys where required.
-
-## v1.2
+## v1.2 — shipped in 0.1.0
 
 Awards:
 
--   Academy Awards
--   BAFTA
--   Golden Globes
--   Primetime Emmys
+-   Academy Awards (full history, from DLu/oscar_data)
+-   BAFTA, Golden Globes, Primetime Emmys (from Wikidata — partial, winner-heavy)
 
-Store winners and nominations separately.
+Winners and nominations are separate namespaces; nominations include the winner so the
+nominee set is complete on its own. Ceremonies are selectable individually.
 
 Examples:
 
 -   `award=oscar:best_picture`
 -   `nomination=oscar:best_director`
 
-## v1.3
+## v1.3 — shipped in 0.1.0
 
-Curated lists:
+Curated lists, selectable individually, snapshotted into the plugin at release time:
 
 -   IMDb Top 250
--   Sight & Sound
--   BFI Top 100
--   AFI 100
+-   Sight & Sound 2022 critics' poll
+-   BFI Top 100 British films
+-   AFI 100 Years…100 Movies (2007)
 -   National Film Registry
 -   Criterion Collection
--   TSPDT
+-   TSPDT 1,000 Greatest Films
 
 ## Architecture
 

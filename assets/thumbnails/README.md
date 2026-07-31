@@ -1,16 +1,20 @@
 # Collection artwork
 
-A starter set of collection posters for the namespaces Tagsmith creates libraries for.
-They are **not** shipped inside the plugin — the installable stays small and carries no
-fonts or drawing libraries. Download the set you want, or make your own.
+A starter set of collection posters and library tiles for the namespaces Tagsmith creates
+libraries for. They are **not** shipped inside the plugin — the installable stays small
+and carries no fonts or drawing libraries. Download the set you want, or make your own.
 
-| Folder | Covers | Files |
+| Path | Covers | Files |
 | --- | --- | --- |
 | `origin/` | Country flags | 7 |
 | `lang/` | Languages, named in their own script | 31 |
-| `year/` | Decades, 1920s to 2020s | 11 |
+| `year/` | Decades, 1920s to 2020s — a curated retro set | 11 |
+| `origin.png`, `lang.png`, `year.png` | The libraries' own home-screen tiles | 3 |
 
-Every poster is a 400x600 PNG, which is Jellyfin's poster aspect.
+Generated posters are 400x600 PNGs and the curated decade posters 1000x1500 — both
+Jellyfin's 2:3 poster aspect. The library tiles are 960x540 — the 16:9 shape of the home
+screen's "My Media" cards — and sit at the root of the tree, named after the *namespace*
+rather than a tag value.
 
 `lang/` covers 27 languages — English, French, Spanish, Chinese, Japanese, and all 22
 languages of the Eighth Schedule to the Constitution of India:
@@ -29,20 +33,24 @@ are byte-identical, so whichever one matches, the collection gets the same poste
 
 ## Installing
 
-Copy the folders you want into Tagsmith's thumbnail directory, keeping the namespace
-folder names:
+Copy the folders you want into Tagsmith's thumbnail directory, keeping the layout:
 
 ```
-<config>/tagsmith/thumbnails/origin/india.png
+<config>/tagsmith/thumbnails/origin.png            the Origins library tile
+<config>/tagsmith/thumbnails/origin/india.png      one collection's poster
 <config>/tagsmith/thumbnails/lang/bengali.png
 <config>/tagsmith/thumbnails/year/1950s.png
 ```
 
-`<config>` is the Jellyfin configuration directory — `/config` in the official Docker
-image, `%ProgramData%\Jellyfin\Server\config` on Windows.
+`<config>` is Jellyfin's data directory — `/config` in the official Docker image,
+`%ProgramData%\Jellyfin\Server` on Windows. Tagsmith also accepts the `config/`
+directory inside it (`%ProgramData%\Jellyfin\Server\config`) when only that one holds a
+thumbnails folder, and logs which of the two it resolved.
 
-Tagsmith applies a poster only when the collection has no image, or when the image it
-already applied has changed on disk. It never overwrites artwork you picked by hand.
+On the next sync, Tagsmith applies a poster or tile wherever the collection or library
+has no image, or where the image it already applied has changed on disk. It never
+overwrites artwork you picked by hand — only the **Reapply collection artwork** button
+does that.
 
 ## Naming
 
@@ -66,14 +74,16 @@ npm --prefix scripts install
 node scripts/generate-artwork.mjs
 ```
 
-`scripts/generate-artwork.mjs` rebuilds all three folders from scratch and verifies that
-each file came out as a 400x600 PNG with something actually drawn on it, and that the
-face assigned to each language actually carries that language's characters. Add a
-country, language or decade by editing the tables near the top of that script — the
-filename is derived from the display name using the same slug rules as the C# side, so
-it stays correct by construction. A language whose writing system is not already in the
-`SCRIPTS` table needs one row there and one `@fontsource` dependency in
-`scripts/package.json` as well.
+`scripts/generate-artwork.mjs` rebuilds the `origin/` and `lang/` folders and the three
+library tiles from scratch, and verifies that each file came out at its intended size
+with something actually drawn on it, and that the face assigned to each language actually
+carries that language's characters. The `year/` posters are the one **curated** set — the
+generator verifies they are present but never rewrites them, so replacing a decade poster
+is just replacing the file. Add a country or language by editing the tables near the top
+of the script — the filename is derived from the display name using the same slug rules
+as the C# side, so it stays correct by construction. A language whose writing system is
+not already in the `SCRIPTS` table needs one row there and one `@fontsource` dependency
+in `scripts/package.json` as well.
 
 The complex scripts rely on the shaper: conjuncts, reordered vowel signs and cursive
 joining are all resolved by HarfBuzz inside Skia, which is what `@napi-rs/canvas` draws

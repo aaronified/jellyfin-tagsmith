@@ -153,10 +153,11 @@ called "India".
 
 ### Artwork is not bundled
 
-The plugin ships no images. A starter set lives in `assets/thumbnails/<namespace>/` in this
+The plugin ships no images. A starter set lives in `assets/thumbnails/` in this
 repository — flat flags with a gradient and a label for `origin`, native-script name cards
-for `lang`, decade cards for `year` — generated at build time so no fonts or drawing
-libraries ever enter the plugin. Users download the set they want, or make their own.
+for `lang`, decade cards for `year`, plus a 16:9 home-screen tile per library — generated
+at build time so no fonts or drawing libraries ever enter the plugin. Users download the
+set they want, or make their own.
 
 This keeps the installable plugin small, which matters when the update-from-dashboard loop
 is the main way it gets tested.
@@ -164,15 +165,29 @@ is the main way it gets tested.
 ### Where they go
 
 ```
-<config>/tagsmith/thumbnails/origin/india.png
+<config>/tagsmith/thumbnails/origin.png            the Origins library tile
+<config>/tagsmith/thumbnails/origin/india.png      one collection's poster
+<config>/tagsmith/thumbnails/lang.png
 <config>/tagsmith/thumbnails/lang/bengali.png
+<config>/tagsmith/thumbnails/year.png
 <config>/tagsmith/thumbnails/year/1950s.png
 ```
+
+Collection posters sit inside the namespace directory, named after the tag value. The
+**library tile** — the Origins card on the home screen — sits at the root of the tree,
+named after the namespace itself, and follows exactly the same policy table as the
+posters. The root of the tree is reserved for tiles; adoption writes there.
 
 The filename stem is matched against the tag value after running both through
 `TagNormalizer.Slug`. That makes matching case-insensitive and forgiving of separators, so
 `india.png`, `India.PNG`, `United States.png` and `united-states.png` all resolve. Accepted
 extensions: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`.
+
+`<config>` is Jellyfin's data directory — `/config` in the official Docker image. On a
+native install, where the data directory and the `config/` directory inside it diverge,
+Tagsmith prefers `<data>/tagsmith/thumbnails` but accepts `<data>/config/tagsmith/thumbnails`
+when only that one exists, so following either reading of "config directory" works. The
+resolved folder and its file count are logged at the start of every artwork pass.
 
 ### The folder is the source of truth, in both directions
 
@@ -180,29 +195,32 @@ Artwork moves both ways, but never in the same operation. Three triggers, one jo
 
 | Trigger | What it does about artwork |
 | --- | --- |
-| **Sync Tagsmith tags** (scheduled, nightly at 04:00) | Applies the file in the thumbnails folder to the collections **it created in that run**, and to nothing else. Never adopts |
-| **A poster changing on a collection** (event) | Adopts it into the thumbnails folder immediately |
-| **Reapply collection artwork** (button) | Forces the folder onto **every** collection Tagsmith owns, discarding posters set by hand |
+| **Sync Tagsmith tags** (scheduled, nightly at 04:00) | Applies the folder wherever that cannot destroy user intent: collections and libraries **created in that run**, anything **with no poster at all**, and Tagsmith's **own poster gone stale** because the source file changed. A poster the user set by hand is never touched. Never adopts |
+| **A poster changing on a collection or library tile** (event) | Adopts it into the thumbnails folder immediately |
+| **Reapply collection artwork** (button) | Forces the folder onto **every** collection and library tile Tagsmith owns, discarding posters set by hand. Items with no matching file keep what they have |
+
+The scheduled-run row is what makes "drop images into the folder, run a sync" work for
+collections that already existed — they have no poster, so the folder fills them in. A
+new image dropped over an old one is picked up on the next sync too, because the poster
+being replaced is Tagsmith's own. Only a poster the *user* set stands in the way, and
+only the reapply button discards those.
 
 Set a poster by hand on a collection in the library UI and Tagsmith **adopts** it: the
 image is copied into `<config>/tagsmith/thumbnails/<namespace>/` as the stored artwork for
 that value, replacing whatever was there. From then on it is an ordinary file you can back
 up, edit or delete, and it survives the collection being rebuilt or the library being torn
-down and recreated.
+down and recreated. A library tile set by hand adopts the same way, into
+`thumbnails/<namespace>.png`.
 
 Adoption is driven by `ILibraryManager.ItemUpdated`, so it happens the moment the poster is
-set rather than at the next nightly run. That matters both ways round: the backup is
-immediate, and the heavy library-wide pass no longer has to hash a poster per collection to
-find out whether anything changed. The listener ignores every item whose id is not in
-`ManagedCollections`, which is nearly all of them.
+set rather than at the next nightly run. The listener ignores every item whose id is not in
+`ManagedCollections` or `ManagedLibraries`, which is nearly all of them.
 
-Once a collection exists, the nightly run does not touch its artwork at all. Change the
-image in the thumbnails folder and nothing happens until you press **Reapply collection
-artwork**; that is the only trigger that reads the folder for a collection that already
-exists.
-
-The table above is `ArtworkPolicy.Decide`, one function, so the "no overlap" claim is a
-test rather than a reading of three call sites.
+The table above is `ArtworkPolicy.Decide`, one function over a handful of facts (created
+this run, has a poster, is that poster Tagsmith's own, has the file changed), so the "no
+overlap" and "never over a hand-set poster" claims are exhaustive tests rather than a
+reading of three call sites. Carrying it out — hashing, applying, adopting, the loop
+guard — lives in `ArtworkSynchronizer`, shared by the projector and the listener.
 
 #### Why it cannot loop
 
@@ -219,14 +237,15 @@ thing the listener watches for. Two guards, and both have to fail:
   back over the source file.
 
 The hash of what landed is only recorded *after* the save returns, so there is a window in
-which Tagsmith's own poster is on the collection and the record does not yet say so. The
-projector marks the box set id before it writes anything and unmarks it in the same step
-that records the hash, both under the lock the listener reads and decides under. So the
-listener sees one of three states and never a state in between: before the apply, where the
-poster it adopts really is the user's; during it, where the mark is present and it stands
-off; or after it, where the hash says the poster is Tagsmith's. The lock is not held across
-the image save itself, so nothing can wedge if a future server version raises the event from
-inside it.
+which Tagsmith's own poster is on the collection and the record does not yet say so.
+`ArtworkSynchronizer` marks the item id before it writes anything — a reference count, not
+a set, because the sync and reapply tasks can both be applying to the same item at once —
+and releases the claim only after the hash is recorded, both under the lock the listener
+reads and decides under. So the listener sees one of three states and never a state in
+between: before the apply, where the poster it adopts really is the user's; during it,
+where the mark is present and it stands off; or after it, where the hash says the poster is
+Tagsmith's. The lock is not held across the image save itself, so nothing can wedge if a
+future server version raises the event from inside it.
 
 That is also why the handler does its work inline on Jellyfin's thread rather than queueing
 it: work resumed on a worker would run after the lock had been released and the mark
@@ -245,10 +264,10 @@ On each run:
 
 | Situation | Behaviour |
 | --- | --- |
-| Namespace enabled, library missing | Create it |
-| Namespace enabled, library exists | Reconcile its collections |
+| Namespace enabled, library missing | Create it, and apply its tile from the thumbnails folder |
+| Namespace enabled, library exists | Reconcile its collections, and run its tile through the artwork policy |
 | Collection created in this run | Apply its artwork from the thumbnails folder |
-| Collection already existed | Reconcile membership only. Its artwork is not read, written or hashed — see [Images](#images) |
+| Collection already existed | Reconcile membership; artwork through the policy — filled in when missing, refreshed when Tagsmith's own poster went stale, hand-set posters untouched. See [Images](#images) |
 | **Wanted library name already taken by a library Tagsmith does not own** | Refuse. Log an error and skip the projection — never adopt |
 | Library renamed in Jellyfin's own settings | Follow the rename. Ownership is by id, so this is not a deletion |
 | Library name changed in *Tagsmith's* settings | Tear down and rebuild — Jellyfin 10.11 exposes no rename on `ILibraryManager` |
@@ -263,6 +282,16 @@ deliberately removed, leaving them unable to be rid of it short of uninstalling 
 Reconcile, never resurrect. That decision is written to configuration the moment it is
 made, rather than at the end of the run, so cancelling the task partway through cannot lose
 it.
+
+There is also an explicit way out: **Delete projected collections** on the settings page
+(the *Delete Tagsmith collections* task) tears down every projection at once — all the
+collections, the libraries and the box-set folders — regardless of the *remove when
+disabled* setting. **Media is never touched**: a collection's members are linked children,
+so deleting the collection deletes the link, never the film. The directories removed are
+Tagsmith's own `tagsmith-*` ones, plus the box sets' internal metadata folders, which the
+server cleans up as part of the item delete. Tags are kept too, so projections left
+enabled rebuild from them on the next sync; untick them — and save — first to make the
+deletion stick.
 
 Two secondary signals keep this honest. The configured library name is sanitised exactly as
 `LibraryManager.AddVirtualFolder` sanitises it — `GetValidFilename` on a trimmed name —
@@ -329,10 +358,17 @@ stops it copying Tagsmith's own poster back over the user's file.
 **`ProviderManager.SaveImage(item, stream, …)` does not write to the database.** In 10.11.11
 `ImageSaver.SaveImage` writes the file and calls `BaseItem.SetImagePath`, which mutates
 `ImageInfos` in memory and nothing else; `ImageController.SetItemImage` follows it with
-`item.UpdateToRepositoryAsync(ItemUpdateType.ImageUpdate, …)` and that is what both persists
-the image and raises the event. Tagsmith does not make that second call, so applied artwork is
-not persisted and Tagsmith's own applies do not raise `ItemUpdated` directly — though a
-refresh queued elsewhere still can, which is why the loop guard does not depend on that.
+`item.UpdateToRepositoryAsync(ItemUpdateType.ImageUpdate, …)` and that is what persists the
+image, recomputes the blurhash and `DateModified` the clients derive their image cache tags
+from, **and raises `ItemUpdated` inline on the calling thread**. Tagsmith makes that second
+call after every apply — skipping it loses the poster on restart and leaves clients showing
+the old tile — which is exactly why the applying-marker half of the loop guard exists: the
+listener runs inside Tagsmith's own save.
+
+The same two calls set a **library's** image: a `CollectionFolder` overrides
+`IsSaveLocalMetadataEnabled()` to true, so the file lands beside the library's `options.xml`
+under `<config>/root/default/<Name>/`, the same place the dashboard's own image upload puts
+it.
 
 **`CollectionCreationOptions.ParentId` compiles but is ignored.** Do not reintroduce it.
 `CollectionManager.CreateCollectionAsync` never reads it:

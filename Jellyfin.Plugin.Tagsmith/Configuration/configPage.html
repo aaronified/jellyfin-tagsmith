@@ -254,11 +254,13 @@
                         Collection artwork is optional and ships separately. Drop images into
                         <code>&lt;config&gt;/tagsmith/thumbnails/&lt;namespace&gt;/</code> named
                         after the tag value — <code>india.png</code>, <code>bengali.png</code>,
-                        <code>1950s.png</code>. Case and separators do not matter. A rescan
-                        applies them to the collections it creates; set a poster by hand on a
-                        collection and Tagsmith copies it into that folder straight away, so it
-                        survives the collection being rebuilt. Changing an image in the folder
-                        afterwards takes effect on <em>Reapply collection artwork</em>, below.
+                        <code>1950s.png</code> — and a library tile at
+                        <code>&lt;config&gt;/tagsmith/thumbnails/&lt;namespace&gt;.png</code>.
+                        Case and separators do not matter. A rescan applies them wherever a
+                        collection or library has no poster, or where the image Tagsmith
+                        itself applied has changed on disk — never over a poster you set by
+                        hand. Set a poster by hand and Tagsmith copies it into that folder
+                        straight away, so it survives the collection being rebuilt.
                     </div>
                 </div>
 
@@ -310,11 +312,27 @@
                     <span>Reapply collection artwork</span>
                 </button>
                 <div class="fieldDescription">
-                    Replaces the poster on every projected collection with the matching image
-                    from <code>&lt;config&gt;/tagsmith/thumbnails/&lt;namespace&gt;/</code>,
-                    overwriting posters set by hand. Collections with no matching file keep what
-                    they have. Use this after dropping in a new set of images — a rescan only
-                    applies artwork to collections it creates, so it will not pick them up.
+                    Replaces the poster on every projected collection and library tile with the
+                    matching image from <code>&lt;config&gt;/tagsmith/thumbnails/</code>,
+                    <strong>overwriting posters set by hand</strong>. Items with no matching
+                    file keep what they have. A regular rescan already fills in missing posters
+                    and refreshes Tagsmith's own stale ones; this button is for discarding
+                    hand-set posters in favour of the folder — after dropping in a new set, or
+                    to undo an adoption.
+                </div>
+
+                <button is="emby-button" type="button" id="TagsmithDeleteCollections"
+                        class="raised block" style="margin-top:1em;">
+                    <span>Delete projected collections</span>
+                </button>
+                <div class="fieldDescription">
+                    Removes every collection and library Tagsmith created — the box-set entries
+                    and the Origins/Languages/Decades libraries. <strong>Your media is never
+                    touched:</strong> collections only link to movies and shows, so deleting
+                    one deletes the link, not the film. Tags are kept too. Projections left
+                    enabled above are rebuilt from the tags on the next sync; to make the
+                    deletion stick, untick them <em>and save</em> before pressing this. With
+                    dry run on, the deletions are only logged.
                 </div>
             </div>
         </div>
@@ -336,6 +354,7 @@
             var checkGroups = { AwardCeremonies: '.tagsmithCeremony', EnabledLists: '.tagsmithList' };
             var taskKey = 'TagsmithSync';
             var artworkTaskKey = 'TagsmithReapplyArtwork';
+            var deleteTaskKey = 'TagsmithDeleteCollections';
 
             function toLines(value) {
                 return (value || []).join('\n');
@@ -428,6 +447,22 @@
                     artworkTaskKey,
                     'Reapplying collection artwork.',
                     'Could not start the artwork reapply.');
+            });
+
+            document.querySelector('#TagsmithDeleteCollections').addEventListener('click', function () {
+                // Deliberately a confirm: this discards the collections and libraries,
+                // even though media and tags are safe and enabled projections rebuild.
+                if (!window.confirm(
+                    'Delete every collection and library Tagsmith created?\n\n' +
+                    'Your media and tags are NOT touched. Projections still enabled ' +
+                    'will be rebuilt on the next sync.')) {
+                    return;
+                }
+
+                startTask(
+                    deleteTaskKey,
+                    'Deleting projected collections.',
+                    'Could not start the collection delete.');
             });
         })();
     </script>

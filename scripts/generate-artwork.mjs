@@ -354,6 +354,46 @@ function buildDecadePoster(startYear, accent) {
 }
 
 // ---------------------------------------------------------------------------
+// Library tiles.
+// ---------------------------------------------------------------------------
+
+// Jellyfin's home-screen "My Media" tiles are 16:9. One tile per projection, named after
+// the *namespace* — Tagsmith looks the library image up at thumbnails/<namespace>.png,
+// beside the per-value poster directories.
+const TILE_WIDTH = 960;
+const TILE_HEIGHT = 540;
+
+const LIBRARY_TILES = [
+  { namespace: 'origin', title: 'Origins', sample: 'India · Japan · France', accent: parseHex('#2b6a52') },
+  { namespace: 'lang', title: 'Languages', sample: 'Bengali · Tamil · Japanese', accent: parseHex('#5b4295') },
+  { namespace: 'year', title: 'Decades', sample: '1950s · 1980s · 2020s', accent: parseHex('#9a4f2e') }
+];
+
+/** Big title over the projection's accent, a sample of its values underneath. */
+function buildLibraryTile({ title, sample, accent }) {
+  const canvas = createCanvas(TILE_WIDTH, TILE_HEIGHT);
+  const ctx = canvas.getContext('2d');
+
+  const gradient = ctx.createLinearGradient(0, 0, TILE_WIDTH, TILE_HEIGHT);
+  gradient.addColorStop(0, rgba(mix(accent, { r: 255, g: 255, b: 255 }, 0.18), 1));
+  gradient.addColorStop(0.55, rgba(accent, 1));
+  gradient.addColorStop(1, rgba(mix(accent, INK, 0.8), 1));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, TILE_WIDTH, TILE_HEIGHT);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
+  ctx.font = '600 116px "Latin"';
+  withShadow(ctx, () => ctx.fillText(title, TILE_WIDTH / 2, 306));
+
+  ctx.font = '40px "Latin"';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+  ctx.fillText(sample, TILE_WIDTH / 2, 396);
+
+  return canvas;
+}
+
+// ---------------------------------------------------------------------------
 // Write everything out.
 // ---------------------------------------------------------------------------
 
@@ -378,10 +418,17 @@ async function writePoster(namespace, names, canvas) {
 
 const written = [];
 
-for (const namespace of ['origin', 'lang', 'year']) {
+// year/ is deliberately not in this list: the decade posters are a curated, hand-supplied
+// set rather than generated ones, so the generator must never wipe or overwrite them.
+// The year *tile* (year.png at the root) is still generated below.
+for (const namespace of ['origin', 'lang']) {
   // Regenerate from scratch: a renamed value would otherwise leave a stale poster behind.
   rmSync(join(outputRoot, namespace), { recursive: true, force: true });
   mkdirSync(join(outputRoot, namespace), { recursive: true });
+}
+
+for (const namespace of ['origin', 'lang', 'year']) {
+  rmSync(join(outputRoot, `${namespace}.png`), { force: true });
 }
 
 for (const country of COUNTRIES) {
@@ -393,9 +440,20 @@ for (const language of LANGUAGES) {
   written.push(...(await writePoster('lang', names, buildLanguagePoster(language))));
 }
 
-for (const [index, startYear] of DECADES.entries()) {
-  const canvas = buildDecadePoster(startYear, decadeAccent(index, DECADES.length));
-  written.push(...(await writePoster('year', `${startYear}s`, canvas)));
+// Decade posters are curated (see above); verify they are present and well-formed
+// rather than generating them, so a botched replacement still fails the run.
+for (const startYear of DECADES) {
+  const path = join(outputRoot, 'year', `${startYear}s.png`);
+  if (!existsSync(path)) throw new Error(`curated decade poster missing: ${path}`);
+}
+
+for (const tile of LIBRARY_TILES) {
+  const png = await sharp(buildLibraryTile(tile).toBuffer('image/png'))
+    .png({ compressionLevel: 9, effort: 10 })
+    .toBuffer();
+  const path = join(outputRoot, `${tile.namespace}.png`);
+  writeFileSync(path, png);
+  written.push({ path, bytes: png.length, tile: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -435,19 +493,38 @@ let malformed = 0;
       malformed++;
     }
   }
+
+  // The tiles' contrast check is inert — their gradient alone clears the floor — so the
+  // glyph probe is what actually catches a missing Latin face there.
+  for (const { namespace, title } of LIBRARY_TILES) {
+    const drawn = notdefProbe('Latin', title);
+    const tofu = notdefProbe('Latin', '￿'.repeat([...title].length));
+    if (drawn.equals(tofu)) {
+      console.warn(`  no glyphs: ${namespace}.png — "${title}" is all tofu in Latin`);
+      malformed++;
+    }
+  }
 }
 
-for (const { path } of written) {
+for (const { path, tile } of written) {
   const metadata = await sharp(path).metadata();
-  if (metadata.format !== 'png' || metadata.width !== POSTER_WIDTH || metadata.height !== POSTER_HEIGHT) {
+  const wanted = tile
+    ? { width: TILE_WIDTH, height: TILE_HEIGHT }
+    : { width: POSTER_WIDTH, height: POSTER_HEIGHT };
+
+  if (metadata.format !== 'png' || metadata.width !== wanted.width || metadata.height !== wanted.height) {
     console.warn(`  wrong image: ${path} (${metadata.format} ${metadata.width}x${metadata.height})`);
     malformed++;
     continue;
   }
 
-  const hero = await sharp(path)
-    .extract({ left: 0, top: HERO_CENTRE - FLAG_HEIGHT / 2, width: POSTER_WIDTH, height: FLAG_HEIGHT })
-    .stats();
+  // Tiles centre their text; posters carry it in the hero band. Either way, the sampled
+  // region must actually have something drawn in it.
+  const band = tile
+    ? { left: 0, top: 160, width: TILE_WIDTH, height: 260 }
+    : { left: 0, top: HERO_CENTRE - FLAG_HEIGHT / 2, width: POSTER_WIDTH, height: FLAG_HEIGHT };
+
+  const hero = await sharp(path).extract(band).stats();
   const contrast = Math.max(...hero.channels.map((channel) => channel.stdev));
   if (contrast < MIN_HERO_CONTRAST) {
     console.warn(`  blank hero: ${path} (contrast ${contrast.toFixed(1)})`);

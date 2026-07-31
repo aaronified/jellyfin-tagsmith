@@ -20,10 +20,16 @@ After **every** code change, in order:
 ```bash
 dotnet build Jellyfin.Plugin.Tagsmith -c Release
 dotnet test tests/Jellyfin.Plugin.Tagsmith.Tests
+# If the machine lacks the .NET 9 runtime, tests run with:
+DOTNET_ROLL_FORWARD=LatestMajor dotnet test tests/Jellyfin.Plugin.Tagsmith.Tests
 
-# Regenerate the country dictionary (needs Node)
+# Regenerate the embedded datasets and starter artwork (needs Node; all but
+# countries hit the network)
 npm --prefix scripts install
 node scripts/generate-countries.mjs
+node scripts/generate-awards.mjs
+node scripts/generate-lists.mjs
+node scripts/generate-artwork.mjs
 ```
 
 ## Ground rules

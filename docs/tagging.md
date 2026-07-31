@@ -12,6 +12,32 @@ The namespace and separator are configurable; the value is always normalised. To
 namespace and separator form a **prefix** (`origin=`), and prefixes are the unit of
 ownership — Tagsmith manages tags by prefix and ignores everything else.
 
+A blank namespace or separator never becomes a prefix. The degenerate prefixes are
+catastrophic — `""` would claim, and therefore delete, every tag in the library — so a
+blank setting simply switches its namespace off rather than widening the claim.
+
+Award, nomination and list values are **structured**: two segments joined by a colon,
+each slugged on its own — `award=oscar:best_picture`, `list=imdb_top_250` (one segment).
+The colon is part of the value, not a separator.
+
+## The namespaces
+
+| Namespace | Meaning | Source |
+| --- | --- | --- |
+| `origin=` | Production countries, all of them | TMDb (`production_countries` for movies, `origin_country` for series) or TVDb, falling back to Jellyfin's `ProductionLocations` |
+| `lang=` | The **original language** — what the film or show was made in | TMDb/TVDb, falling back to the audio streams on the files |
+| `audio_lang=` | Audio-track languages actually on the files (off by default) | Media streams; series sample their first 32 episodes by premiere date |
+| `year=` | First release year | Jellyfin metadata |
+| `award=` | Award wins, `ceremony:category` | Embedded dataset, by IMDb id (off by default) |
+| `nomination=` | Nominations, winners included | Same dataset (off by default) |
+| `list=` | Curated-list membership | Embedded dataset, by IMDb id (off by default; pick lists individually) |
+
+External lookups reach TMDb through the server's built-in client and TVDb through the
+official TheTVDB plugin when it is installed; a series matched only by a TVDb id is
+bridged through TMDb's find endpoint when the plugin is absent. A **failed** lookup — a
+rate limit, an outage — is not evidence about the item: the item keeps its existing
+origin and language tags for that run instead of being rewritten from the fallback.
+
 ## Normalisation
 
 `TagNormalizer.Slug` lowercases, strips diacritics, and collapses every run of
@@ -29,11 +55,15 @@ Non-Latin scripts survive intact — letters and digits in any script are kept.
 ## The pipeline
 
 ```
-provider output  ->  country canonicalisation  ->  user aliases  ->  prune and write
+external lookup  ->  provider output  ->  country canonicalisation  ->  user aliases  ->  prune and write
 ```
 
-1. Each `ITagProvider` produces tags for the item.
-2. Country values pass through `CountryAliasCatalog` (origin namespace only).
+1. Each `ITagProvider` produces tags for the item — the core provider consults TMDb/TVDb
+   first for origin and language, the award and list providers look the item's IMDb id up
+   in their embedded datasets.
+2. Country values pass through `CountryAliasCatalog` (origin namespace only). ISO codes —
+   which is what TMDb and TVDb send — resolve outright: a code is unambiguous by
+   definition, whatever some locale renders as the same letters.
 3. `TagAliasMap` applies the user's rewrite rules, which can also drop tags.
 4. `TagSynchronizer` removes every existing tag matching a managed prefix, adds the newly
    computed set, and writes only if the result differs from what is already there.
@@ -72,12 +102,16 @@ Free-form rewrite rules, applied after canonicalisation, one per line:
 origin:united_states => usa      # scoped to one namespace
 bengali => bangla                # applies in every namespace
 origin:unknown =>                # empty replacement drops the tag
+award:oscar:best_picture => oscar:bp   # structured values keep their colons
 # comments and blank lines are ignored
 ```
 
-Both sides are normalised, so `USA` is stored as `usa`. A scoped rule beats a global rule
-for the same value. A malformed line is skipped rather than throwing — one bad line in the
-settings page cannot break a library scan.
+Both sides are normalised, so `USA` is stored as `usa`. Values are normalised per
+colon-separated segment, which is what lets a rule target the structured award and
+nomination values — those rules must use the namespace-scoped form, since a bare
+`oscar:… =>` line reads as a rule scoped to an `oscar` namespace. A scoped rule beats a
+global rule for the same value. A malformed line is skipped rather than throwing — one
+bad line in the settings page cannot break a library scan.
 
 ## Pruning, and why `KnownPrefixes` exists
 

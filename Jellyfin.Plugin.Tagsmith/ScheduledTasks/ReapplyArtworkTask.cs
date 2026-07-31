@@ -33,7 +33,7 @@ public class ReapplyArtworkTask : IScheduledTask
 
     /// <inheritdoc />
     public string Description =>
-        "Replaces the poster on every projected collection with the matching image from the thumbnails folder.";
+        "Replaces the poster on every projected collection and library tile with the matching image from the thumbnails folder.";
 
     /// <inheritdoc />
     public string Category => "Tagsmith";
