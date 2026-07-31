@@ -1,8 +1,10 @@
 # Collections projection
 
-**Status: implemented in 0.0.3, revised in 0.0.4, 0.0.5 and 0.0.6, off by default. The
-rendering of a plugin-created collections library has not yet been confirmed on a live
-server — enable one namespace first.**
+**Status: implemented in 0.0.3, revised in 0.0.4, 0.0.5, 0.0.6 and 0.1.1, off by default.
+Confirmed on a live server as of 0.1.1: a plugin-created `boxsets` library renders like the
+built-in Collections library, provided its media directory is not empty when the library is
+registered — see [The directory must never be empty](#the-directory-must-never-be-empty),
+which is what made two of the three projections silently useless in 0.1.0.**
 
 Jellyfin dropped tags from global search in 10.10, and several clients — Fladder among
 them — neither display nor filter on tags at all. Tags are therefore invisible on exactly
@@ -37,11 +39,17 @@ Jellyfin config volume:
 ```
 <config>/data/collections/            existing, never touched
 <config>/data/tagsmith-origin/
+    .tagsmith-library
     India [boxset]/collection.xml
     Japan [boxset]/collection.xml
-<config>/data/tagsmith-lang/
+<config>/data/tagsmith-language/
+    .tagsmith-library
     Bengali [boxset]/collection.xml
 ```
+
+The directory is named after the `ProjectionKind` — `tagsmith-origin`,
+`tagsmith-language`, `tagsmith-year` — not after the namespace, so renaming a namespace
+keeps pointing at the same library.
 
 Roughly 100 files under 200 KB for a typical library.
 
@@ -49,6 +57,34 @@ Roughly 100 files under 200 KB for a typical library.
 filesystem collection creation fails outright
 ([jellyfin#14504](https://github.com/jellyfin/jellyfin/issues/14504)). This requirement is
 stated on the settings page and in the README.
+
+### The directory must never be empty
+
+`.tagsmith-library` is not decoration. `AddVirtualFolder` ends by awaiting
+`ValidateTopLibraryFolders`, which resolves the `.mblink` target into a `Folder` item only
+if `Folder.IsLibraryFolderAccessible` approves it — and for a top-level library folder that
+is `DirectoryService.IsAccessible`, which is literally
+`GetFileSystemEntryPaths(path).Any()`. An empty directory is skipped with
+*"Library folder … is inaccessible or empty"* and **no `Folder` row is created**.
+
+Everything the user sees hangs off that row. A `CollectionFolder` is not a real container:
+its `ValidateChildrenInternal` returns a completed task, and its children are projected
+through `PhysicalFolderIds`, which `RefreshLinkedChildren` fills by matching the library's
+locations against the physical folders that exist. With no row there are no
+`PhysicalFolderIds`, and `LibraryManager.GetTopParentIdsForQuery` answers every client
+request for that library with them — substituting a freshly generated GUID when the list is
+empty, so the query matches nothing by construction. **The library renders as an empty
+shelf however many box sets exist in the database, with nothing in the log.**
+
+Jellyfin's own Collections library survives being created against an empty directory only
+because `IsLibraryFolderAccessible` hard-codes an exemption for a folder named
+`collections`. `tagsmith-*` gets no exemption, so Tagsmith seeds the marker itself, before
+`AddVirtualFolder` and never after. `MediaDirectoryTests` pins the rule; `MediaDirectory`
+holds it.
+
+This is what left the Languages and Decades libraries visible but permanently empty in
+0.1.0 while Origins — whose directory had been populated before a full scan happened to run
+over it — worked.
 
 ### How a collection is created
 
@@ -83,6 +119,21 @@ After writing the folders for a projection, Tagsmith runs one scoped `ValidateCh
 over its own directory — the same call the full library scan makes, just rooted lower down
 — so the collections appear in the same run rather than the next one. The user's media
 folders are never scanned.
+
+It must be the **physical** folder, obtained by path. Calling `ValidateChildren` on the
+`CollectionFolder` instead does nothing at all: that class overrides
+`ValidateChildrenInternal` to return a completed task. If the physical folder is not in the
+database, Tagsmith calls `ValidateTopLibraryFolders` — the same call `AddVirtualFolder`
+makes, cheap and non-recursive — and retries; that is what heals a library created against
+an empty directory by an earlier version. A full `QueueLibraryScan` is the last resort only.
+Neither `ValidateMediaLibrary` nor `AddVirtualFolder(refreshLibrary: true)` is ever used:
+both resolve to `CancelIfRunningAndQueue<RefreshMediaLibraryTask>`, which aborts a scan the
+user may be part-way through.
+
+Box sets are then looked up by id, computed with `GetNewItemId(path, typeof(BoxSet))` — the
+same deterministic function the resolver uses. `FindByPath` is only a fallback: it is a
+`Limit 1` query ordered by `DateCreated` descending with no type filter, so a stale row of
+another type at the same path wins it.
 
 ### How membership is maintained afterwards
 
@@ -151,6 +202,27 @@ by hand, and the adoption rule below would write it over the user's curated artw
 Locking also keeps remote *metadata* providers off, which is what you want for an item
 called "India".
 
+#### The lock also switches the server's own collage provider on
+
+`CollectionImageProvider` copies the first member's poster onto a box set, and its
+`Supports` begins `if (!item.IsLocked) return false;` — so locking is what **enables** it.
+Neither gate above applies, because `BaseDynamicImageProvider` is an
+`ICustomMetadataProvider` and `IForcedProvider`, not an `IImageProvider`. It runs on exactly
+one refresh pass, the one where `collection.xml` first flips `IsLocked` — which is the
+`ValidateChildren` Tagsmith itself triggers to resolve the folder it just wrote. So **every
+projected collection acquires a poster moments before Tagsmith gets to apply one**, and
+there is no `MetadataRefreshOptions` flag that suppresses it.
+
+Reading that poster as user intent is what stopped the artwork folder ever reaching a
+collection in 0.1.0. Tagsmith tells the two apart with the server's own predicate: a
+generated image is a local file underneath `item.GetInternalMetadataPath()`, because
+dynamic providers pass `saveLocallyWithMedia: false`, while a web-UI upload goes through
+`ImageController` without that override and lands beside the item as
+`<box set folder>/poster.*`. Never test on the file name — both are `poster`, and the
+extension follows whatever was copied. A generated poster is overwritten by the folder and
+is **never adopted**; adopting one would copy a member's poster over the user's curated
+file for that value.
+
 ### Artwork is not bundled
 
 The plugin ships no images. A starter set lives in `assets/thumbnails/` in this
@@ -172,6 +244,11 @@ is the main way it gets tested.
 <config>/tagsmith/thumbnails/year.png
 <config>/tagsmith/thumbnails/year/1950s.png
 ```
+
+The subdirectory is named after the **namespace** (`lang`), not after the projection kind
+or the library name — so the tree mirrors `assets/thumbnails/` exactly and the starter set
+can be copied in wholesale. A tile at the root without its matching subdirectory is the
+usual cause of "the library picture works but the collections have none".
 
 Collection posters sit inside the namespace directory, named after the tag value. The
 **library tile** — the Origins card on the home screen — sits at the root of the tree,
@@ -216,10 +293,12 @@ Adoption is driven by `ILibraryManager.ItemUpdated`, so it happens the moment th
 set rather than at the next nightly run. The listener ignores every item whose id is not in
 `ManagedCollections` or `ManagedLibraries`, which is nearly all of them.
 
-The table above is `ArtworkPolicy.Decide`, one function over a handful of facts (created
-this run, has a poster, is that poster Tagsmith's own, has the file changed), so the "no
-overlap" and "never over a hand-set poster" claims are exhaustive tests rather than a
-reading of three call sites. Carrying it out — hashing, applying, adopting, the loop
+The table above is `ArtworkPolicy.Decide`, one function over six facts (created this run,
+is there a file for it, has a poster, is that poster Tagsmith's own, is it the server's own,
+has the file changed), so the "no overlap" and "never over a hand-set poster" claims are
+exhaustive tests rather than a reading of three call sites. "Hand-set" is the narrow one:
+`PosterIsUserSet` is a poster that is neither Tagsmith's nor the server's, and it is the
+only thing the scheduled run and the listener will not touch. Carrying it out — hashing, applying, adopting, the loop
 guard — lives in `ArtworkSynchronizer`, shared by the projector and the listener.
 
 #### Why it cannot loop
@@ -273,6 +352,7 @@ On each run:
 | Library name changed in *Tagsmith's* settings | Tear down and rebuild — Jellyfin 10.11 exposes no rename on `ILibraryManager` |
 | Namespace disabled in Tagsmith | Stop maintaining. Delete only if *remove when disabled* is set |
 | **Library deleted in Jellyfin's own settings** | Treat as intent. Flip the namespace off in config, **persist that immediately**, log it, **do not recreate** |
+| Collection exists but Tagsmith never recorded its id | Recover the id from the folder path and record it, so membership, adoption and the reapply button — all keyed on the id — start working again. The folder must sit directly inside the projection's own directory, because what is recovered can be handed to the delete path below |
 | Collection exists for a value with no items left | Delete it (Tagsmith-owned only) |
 | Box sets orphaned by a library deleted out of band | Delete their folders in the same pass. Their database items went with the library, so this is a guarded directory delete: the folder must end in ` [boxset]` and sit directly inside one of Tagsmith's own per-projection directories |
 
@@ -391,6 +471,9 @@ Two settings on the created library are load-bearing:
 - `EnableRealtimeMonitor = false` — same reason `CollectionManager` sets it: nothing here is
   edited from outside.
 
-**Unverified:** that a plugin-created `boxsets` virtual folder renders identically to the
-built-in Collections library. It compiles; whether clients treat it the same needs a live
-test. Ship behind an off-by-default toggle and enable one namespace first.
+**Verified in 0.1.1, the hard way:** a plugin-created `boxsets` virtual folder does render
+like the built-in Collections library — but only once its physical folder exists as a
+database row, which requires the media directory to be non-empty at `AddVirtualFolder`
+time. Without that the library appears on the home screen, accepts a tile image, and shows
+nothing, with no error anywhere. See
+[The directory must never be empty](#the-directory-must-never-be-empty).

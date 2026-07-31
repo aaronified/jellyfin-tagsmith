@@ -241,7 +241,7 @@ public class ArtworkSynchronizer
     }
 
     /// <summary>
-    /// Answers the four questions <see cref="ArtworkPolicy.Decide"/> asks about one target.
+    /// Answers the six questions <see cref="ArtworkPolicy.Decide"/> asks about one target.
     /// </summary>
     private static ArtworkFacts GatherFacts(ArtworkTarget target, string? file, bool createdThisRun)
     {
@@ -272,7 +272,73 @@ public class ArtworkSynchronizer
             HasArtworkFile: file is not null,
             HasPoster: image is not null,
             PosterIsOwn: posterIsOwn,
-            FileChanged: fileHash is not null && !string.Equals(record.ImageHash, fileHash, StringComparison.Ordinal));
+            FileChanged: fileHash is not null && !string.Equals(record.ImageHash, fileHash, StringComparison.Ordinal),
+            PosterIsGenerated: IsServerGenerated(target.Item, image));
+    }
+
+    /// <summary>
+    /// Whether a poster was produced by one of the server's own dynamic image providers
+    /// rather than uploaded by a human.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This mirrors the predicate the server itself uses to decide whether it owns an image:
+    /// <c>BaseDynamicImageProvider.FetchAsync</c> regenerates only when the existing primary
+    /// image is a local file underneath <c>GetInternalMetadataPath()</c>, and bails
+    /// otherwise. Deliberately a little stricter than the server's
+    /// <c>IFileSystem.ContainsSubPath</c>, which is a <c>Contains</c> rather than a
+    /// <c>StartsWith</c> and normalises neither side; and case-insensitive on every platform
+    /// rather than only on Windows, which is safe here because a user upload never reaches
+    /// this tree at all — <c>BoxSet.IsSaveLocalMetadataEnabled()</c> and
+    /// <c>CollectionFolder.IsSaveLocalMetadataEnabled()</c> both return true unconditionally,
+    /// so <c>ImageSaver</c> always writes an upload beside the item.
+    /// </para>
+    /// <para>
+    /// It matters because Tagsmith's own <c>&lt;LockData&gt;true&lt;/LockData&gt;</c> is what
+    /// switches <c>CollectionImageProvider</c> on: its <c>Supports</c> returns false for an
+    /// unlocked item. The provider runs on exactly one refresh pass — the one where
+    /// <c>collection.xml</c> first flips <c>IsLocked</c> — which is the <c>ValidateChildren</c>
+    /// Tagsmith itself triggers to resolve the folder it just wrote. So every projected
+    /// collection acquires a copy of its first member's poster moments before Tagsmith gets
+    /// to apply the artwork folder, and without this test that copy reads as a poster the
+    /// user set by hand and vetoes the folder for good.
+    /// </para>
+    /// <para>
+    /// The two locations are unambiguous: a dynamic provider passes
+    /// <c>saveLocallyWithMedia: false</c>, which forces the image into
+    /// <c>&lt;data&gt;/metadata/library/…</c>, while a web-UI upload goes through
+    /// <c>ImageController</c> with no such override and lands beside the item as
+    /// <c>&lt;box set folder&gt;/poster.*</c>. Do not test on the file name — both are
+    /// "poster", and the extension follows whatever the copied source used.
+    /// </para>
+    /// </remarks>
+    private static bool IsServerGenerated(BaseItem item, ItemImageInfo? image)
+    {
+        if (image?.Path is null || !image.IsLocalFile)
+        {
+            return false;
+        }
+
+        string metadata;
+        string poster;
+        try
+        {
+            metadata = Path.GetFullPath(item.GetInternalMetadataPath());
+            poster = Path.GetFullPath(image.Path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+
+        if (metadata.Length == 0)
+        {
+            return false;
+        }
+
+        return poster.StartsWith(
+            metadata.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -390,6 +456,13 @@ public class ArtworkSynchronizer
     /// (<c>ProviderManager.CanRefreshImages</c> returns false for a locked item outside a
     /// forced full refresh) — otherwise a provider-supplied poster would look exactly like
     /// a hand-set one and would be written over the user's curated artwork file.
+    /// </para>
+    /// <para>
+    /// The lock does not stop the server's <em>own</em> <c>CollectionImageProvider</c>, which
+    /// is not an image provider at all and which the lock in fact enables. That is what
+    /// <see cref="IsServerGenerated"/> is for, and it is why the policy refuses to adopt a
+    /// generated poster: doing so would copy a member's poster over the user's curated file
+    /// for that value.
     /// </para>
     /// <para>
     /// That comparison is the standing half of the loop guard, and it holds no matter how

@@ -140,10 +140,23 @@ public static class BoxSetFolder
     /// <param name="members">The members, in order.</param>
     /// <param name="locked">
     /// Whether to lock the item. Tagsmith locks its collections: a locked item is skipped by
-    /// every remote image provider
+    /// every remote <em>image</em> provider
     /// (<c>ProviderManager.CanRefreshImages</c>: <c>if (item.IsLocked &amp;&amp;
     /// refreshOptions.ImageRefreshMode != MetadataRefreshMode.FullRefresh) return false;</c>),
-    /// which stops a provider-supplied poster being mistaken for one the user set by hand.
+    /// which stops a provider-supplied poster being mistaken for one the user set by hand,
+    /// and by the remote metadata providers, which is what you want for an item called
+    /// "India".
+    /// <para>
+    /// It does <b>not</b> keep the server's own <c>CollectionImageProvider</c> off — it turns
+    /// it <em>on</em>. That provider's <c>Supports</c> begins <c>if (!item.IsLocked) return
+    /// false;</c>, and it reaches the item at all because <c>BaseDynamicImageProvider</c> is
+    /// an <c>ICustomMetadataProvider</c> and <c>IForcedProvider</c> rather than an
+    /// <c>IImageProvider</c>, so neither gate above applies to it. It copies the first
+    /// member's poster onto the box set on the single refresh where this element first flips
+    /// <c>IsLocked</c>. <see cref="ArtworkSynchronizer"/> is what tells that poster apart
+    /// from one a human uploaded; do not remove the lock to avoid it, or remote providers
+    /// come back.
+    /// </para>
     /// </param>
     public static string BuildMetadata(string displayName, IEnumerable<CollectionMember> members, bool locked)
     {

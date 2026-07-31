@@ -159,7 +159,7 @@ dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o artifacts
 ```
 
 Copy `artifacts/Jellyfin.Plugin.Tagsmith.dll` into
-`<jellyfin-config>/plugins/Tagsmith_0.1.0/` and restart the server.
+`<jellyfin-config>/plugins/Tagsmith_0.1.1/` and restart the server.
 
 The `Jellyfin.Controller` package version in the csproj must match the server version,
 or the plugin loads as `NotSupported`.

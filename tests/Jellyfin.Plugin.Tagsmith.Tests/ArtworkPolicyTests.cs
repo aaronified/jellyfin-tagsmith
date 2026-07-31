@@ -21,8 +21,9 @@ public class ArtworkPolicyTests
         bool hasArtworkFile = true,
         bool hasPoster = true,
         bool posterIsOwn = true,
-        bool fileChanged = false) =>
-        new(createdThisRun, hasArtworkFile, hasPoster, posterIsOwn, fileChanged);
+        bool fileChanged = false,
+        bool posterIsGenerated = false) =>
+        new(createdThisRun, hasArtworkFile, hasPoster, posterIsOwn, fileChanged, posterIsGenerated);
 
     // ------------------------------------------------------------ scheduled run
 
@@ -67,6 +68,7 @@ public class ArtworkPolicyTests
         // Even when the folder file changed, and even on a collection created this run —
         // recreating a box set whose folder survived a failed delete resolves with the old
         // poster already on it. Only the explicit reapply button may discard user intent.
+        // "User set" is narrower than "not Tagsmith's": see the generated-poster tests.
         Assert.Equal(
             ArtworkAction.None,
             ArtworkPolicy.Decide(
@@ -94,6 +96,89 @@ public class ArtworkPolicyTests
             ArtworkPolicy.Decide(
                 ArtworkMode.ScheduledRun,
                 Steady(createdThisRun: createdThisRun, hasPoster: hasPoster, posterIsOwn: posterIsOwn, fileChanged: fileChanged)));
+
+    // ------------------------------------------------------------ generated posters
+
+    /// <summary>
+    /// The bug this whole fact exists for. Jellyfin's <c>CollectionImageProvider</c> copies
+    /// the first member's poster onto a box set during the very refresh that resolves the
+    /// folder Tagsmith wrote — and it does so <em>because</em> Tagsmith locks its collections,
+    /// since its <c>Supports</c> returns false for an unlocked item. Every projected
+    /// collection therefore has a poster before Tagsmith ever gets to apply one, and reading
+    /// that as user intent left the artwork folder permanently vetoed.
+    /// </summary>
+    [Fact]
+    public void The_scheduled_run_applies_over_a_poster_the_server_generated() =>
+        Assert.Equal(
+            ArtworkAction.Reapply,
+            ArtworkPolicy.Decide(
+                ArtworkMode.ScheduledRun,
+                Steady(posterIsOwn: false, posterIsGenerated: true)));
+
+    [Fact]
+    public void The_scheduled_run_applies_over_a_generated_poster_even_when_the_file_is_unchanged() =>
+        // Reapply rather than Apply, and this is the reason: the record can still hash-match
+        // the artwork file from an apply that happened before the server generated over it,
+        // so an Apply would short-circuit and the wrong poster would stick forever. This is
+        // the row that un-sticks collections already broken on a live server.
+        Assert.Equal(
+            ArtworkAction.Reapply,
+            ArtworkPolicy.Decide(
+                ArtworkMode.ScheduledRun,
+                Steady(posterIsOwn: false, fileChanged: false, posterIsGenerated: true)));
+
+    [Fact]
+    public void A_collection_created_this_run_takes_the_folder_over_a_generated_poster() =>
+        Assert.Equal(
+            ArtworkAction.Apply,
+            ArtworkPolicy.Decide(
+                ArtworkMode.ScheduledRun,
+                Steady(createdThisRun: true, posterIsOwn: false, posterIsGenerated: true)));
+
+    /// <summary>
+    /// Adoption copies the poster on an item into the thumbnails folder as the stored
+    /// artwork for that value. Doing that with a poster Jellyfin generated would overwrite
+    /// the user's curated file with a copy of one member's poster — the exact data loss
+    /// adoption exists to prevent.
+    /// </summary>
+    [Fact]
+    public void The_listener_never_adopts_a_poster_the_server_generated() =>
+        Assert.Equal(
+            ArtworkAction.None,
+            ArtworkPolicy.Decide(
+                ArtworkMode.AdoptOnly,
+                Steady(posterIsOwn: false, posterIsGenerated: true)));
+
+    [Fact]
+    public void A_poster_that_is_both_Tagsmiths_and_in_the_metadata_tree_is_left_alone()
+    {
+        // Both facts can hold at once: a local save that fails falls back to the internal
+        // metadata path, so Tagsmith's own poster ends up where a generated one lives. A
+        // forced reapply there would re-save an identical image every night, and an
+        // unchanged sync is supposed to be a no-op.
+        var action = ArtworkPolicy.Decide(
+            ArtworkMode.ScheduledRun,
+            Steady(posterIsOwn: true, posterIsGenerated: true, fileChanged: false));
+
+        Assert.Equal(ArtworkAction.None, action);
+    }
+
+    [Fact]
+    public void A_generated_poster_is_never_treated_as_user_intent()
+    {
+        foreach (var facts in AllFacts().Where(f => f.PosterIsGenerated))
+        {
+            Assert.False(facts.PosterIsUserSet);
+        }
+    }
+
+    [Fact]
+    public void Only_a_poster_that_is_neither_Tagsmiths_nor_the_servers_counts_as_user_intent()
+    {
+        Assert.True(Steady(hasPoster: true, posterIsOwn: false, posterIsGenerated: false).PosterIsUserSet);
+        Assert.False(Steady(hasPoster: false, posterIsOwn: false, posterIsGenerated: false).PosterIsUserSet);
+        Assert.False(Steady(hasPoster: true, posterIsOwn: true, posterIsGenerated: false).PosterIsUserSet);
+    }
 
     // ------------------------------------------------------------ reapply button
 
@@ -175,7 +260,7 @@ public class ArtworkPolicyTests
     private static IEnumerable<ArtworkMode> AllModes() => Enum.GetValues<ArtworkMode>();
 
     /// <summary>
-    /// Every combination of the five facts. Thirty-two cases is cheap, and exhaustive beats
+    /// Every combination of the six facts. Sixty-four cases is cheap, and exhaustive beats
     /// clever here.
     /// </summary>
     private static IEnumerable<ArtworkFacts> AllFacts() =>
@@ -184,7 +269,8 @@ public class ArtworkPolicyTests
         from hasPoster in new[] { false, true }
         from own in new[] { false, true }
         from changed in new[] { false, true }
-        select new ArtworkFacts(created, hasFile, hasPoster, own, changed);
+        from generated in new[] { false, true }
+        select new ArtworkFacts(created, hasFile, hasPoster, own, changed, generated);
 
     // ------------------------------------------------------------ the event filter
 
