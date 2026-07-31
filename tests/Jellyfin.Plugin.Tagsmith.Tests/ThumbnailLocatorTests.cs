@@ -114,6 +114,114 @@ public class ThumbnailLocatorTests : IDisposable
         Assert.EndsWith(".png", Locator.Store("year", "1950s", source), StringComparison.Ordinal);
     }
 
+    // ------------------------------------------------------------ library tiles
+
+    [Theory]
+    [InlineData("origin.png")]
+    [InlineData("Origin.PNG")]
+    [InlineData("origin.jpg")]
+    public void A_library_tile_lives_at_the_root_named_after_the_namespace(string fileName)
+    {
+        var root = Path.Combine(_root, "tagsmith", "thumbnails");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, fileName), "library tile");
+
+        Assert.NotNull(Locator.FindLibrary("origin"));
+    }
+
+    [Fact]
+    public void A_library_tile_does_not_match_a_value_inside_the_namespace()
+    {
+        // thumbnails/origin/india.png is India's poster, not the Origins tile.
+        Given("origin", "india.png");
+
+        Assert.Null(Locator.FindLibrary("origin"));
+    }
+
+    [Fact]
+    public void A_value_poster_does_not_match_the_library_tile()
+    {
+        var root = Path.Combine(_root, "tagsmith", "thumbnails");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "origin.png"), "library tile");
+
+        Assert.Null(Locator.Find("origin", "origin"));
+    }
+
+    [Fact]
+    public void StoreLibrary_adopts_a_manual_library_image()
+    {
+        var source = Path.Combine(_root, "manual.jpg");
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(source, "hand-picked tile");
+
+        var written = Locator.StoreLibrary("origin", source);
+
+        Assert.NotNull(written);
+        Assert.Equal(Path.Combine(Locator.Root, "origin.jpg"), written);
+        Assert.Equal("hand-picked tile", File.ReadAllText(written));
+        Assert.NotNull(Locator.FindLibrary("origin"));
+    }
+
+    [Fact]
+    public void StoreLibrary_replaces_the_previous_tile_whatever_its_extension()
+    {
+        var root = Path.Combine(_root, "tagsmith", "thumbnails");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "Origin.PNG"), "old tile");
+
+        var source = Path.Combine(_root, "manual.jpg");
+        File.WriteAllText(source, "new tile");
+        Locator.StoreLibrary("origin", source);
+
+        Assert.Single(Directory.GetFiles(root));
+        Assert.Equal("new tile", File.ReadAllText(Locator.FindLibrary("origin")!));
+    }
+
+    [Theory]
+    [InlineData("../../../etc")]
+    [InlineData("origin/sub")]
+    [InlineData("")]
+    public void An_unusable_namespace_has_no_library_tile(string tagNamespace)
+    {
+        Assert.Null(Locator.FindLibrary(tagNamespace));
+        Assert.Null(Locator.StoreLibrary(tagNamespace, Path.Combine(_root, "missing.png")));
+    }
+
+    // ------------------------------------------------------------ root resolution
+
+    [Fact]
+    public void Resolve_prefers_the_documented_root()
+    {
+        var primary = Path.Combine(_root, "data");
+        var alternate = Path.Combine(_root, "config");
+        Directory.CreateDirectory(Path.Combine(primary, "tagsmith", "thumbnails"));
+        Directory.CreateDirectory(Path.Combine(alternate, "tagsmith", "thumbnails"));
+
+        Assert.StartsWith(primary, ThumbnailLocator.Resolve(primary, alternate).Root, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Resolve_accepts_the_configuration_directory_when_only_it_is_populated()
+    {
+        // A native-install user following the "<config>" wording lands in
+        // <data>/config/tagsmith/thumbnails; their images should still work.
+        var primary = Path.Combine(_root, "data");
+        var alternate = Path.Combine(_root, "config");
+        Directory.CreateDirectory(Path.Combine(alternate, "tagsmith", "thumbnails"));
+
+        Assert.StartsWith(alternate, ThumbnailLocator.Resolve(primary, alternate).Root, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Resolve_defaults_to_the_documented_root_when_neither_exists()
+    {
+        var primary = Path.Combine(_root, "data");
+        var alternate = Path.Combine(_root, "config");
+
+        Assert.StartsWith(primary, ThumbnailLocator.Resolve(primary, alternate).Root, StringComparison.Ordinal);
+    }
+
     // ------------------------------------------------------------ containment
 
     [Theory]

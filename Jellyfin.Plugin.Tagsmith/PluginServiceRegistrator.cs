@@ -15,15 +15,18 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        // Add further ITagProvider implementations here (TMDb, awards, curated lists).
+        // Add further ITagProvider implementations here; all registered providers run for
+        // every item and their tags are unioned.
         serviceCollection.AddSingleton<ITagProvider, CoreMetadataTagProvider>();
         serviceCollection.AddSingleton<TagSynchronizer>();
+        serviceCollection.AddSingleton<ArtworkSynchronizer>();
         serviceCollection.AddSingleton<CollectionProjector>();
 
         // Subscribes to ILibraryManager.ItemUpdated on start and unsubscribes on stop, so a
-        // poster set on one of Tagsmith's collections is backed up into the thumbnails folder
-        // straight away rather than waiting for the nightly pass. The listener shares the
-        // singleton projector, which is what makes its loop guard work.
+        // poster set on one of Tagsmith's collections or libraries is backed up into the
+        // thumbnails folder straight away rather than waiting for the nightly pass. The
+        // listener shares the singleton artwork synchroniser, which is what makes its loop
+        // guard work.
         serviceCollection.AddHostedService<PosterAdoptionListener>();
     }
 }

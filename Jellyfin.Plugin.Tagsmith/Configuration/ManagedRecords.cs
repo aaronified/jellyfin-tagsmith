@@ -21,9 +21,29 @@ public enum ProjectionKind
 }
 
 /// <summary>
+/// The artwork bookkeeping shared by everything Tagsmith can put a poster on — projected
+/// collections and the libraries that hold them. Two hashes per record, never one; see
+/// <see cref="ManagedCollection.AppliedImageHash"/> for why they differ.
+/// </summary>
+public interface IArtworkRecord
+{
+    /// <summary>
+    /// Gets or sets a hash of the artwork file in the thumbnails folder that Tagsmith last
+    /// applied, so a run with nothing changed writes nothing.
+    /// </summary>
+    string ImageHash { get; set; }
+
+    /// <summary>
+    /// Gets or sets a hash of the image file Tagsmith's own <c>SaveImage</c> call produced
+    /// on the item.
+    /// </summary>
+    string AppliedImageHash { get; set; }
+}
+
+/// <summary>
 /// A collection Tagsmith created and therefore owns.
 /// </summary>
-public class ManagedCollection
+public class ManagedCollection : IArtworkRecord
 {
     /// <summary>Gets or sets the projection this collection belongs to.</summary>
     public ProjectionKind Kind { get; set; }
@@ -72,10 +92,24 @@ public class ManagedCollection
 /// when its id matches; a library that merely shares a name is left alone. See
 /// <see cref="Collections.LibraryOwnership"/>.
 /// </remarks>
-public class ManagedLibrary
+public class ManagedLibrary : IArtworkRecord
 {
     /// <summary>Gets or sets the projection this library serves.</summary>
     public ProjectionKind Kind { get; set; }
+
+    /// <summary>
+    /// Gets or sets a hash of the library-tile artwork file
+    /// (<c>thumbnails/&lt;namespace&gt;.png</c>) Tagsmith last applied.
+    /// </summary>
+    public string ImageHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a hash of the image Tagsmith's own <c>SaveImage</c> call produced on the
+    /// library's <c>CollectionFolder</c>. Same two-hash rule as
+    /// <see cref="ManagedCollection.AppliedImageHash"/>: the server re-encodes on save, so
+    /// the bytes on the item are not the bytes in the thumbnails folder.
+    /// </summary>
+    public string AppliedImageHash { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the library name as Jellyfin last reported it.

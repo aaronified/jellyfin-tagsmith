@@ -29,6 +29,31 @@ public class ThumbnailLocator
     }
 
     /// <summary>
+    /// Picks the thumbnails root from the directories Jellyfin actually uses.
+    /// </summary>
+    /// <remarks>
+    /// The documented location is <c>&lt;config&gt;/tagsmith/thumbnails</c>, where
+    /// <c>&lt;config&gt;</c> is the Docker image's <c>/config</c> volume — which is
+    /// <c>ProgramDataPath</c>, not <c>ConfigurationDirectoryPath</c>. On a native install the
+    /// two diverge (<c>ConfigurationDirectoryPath</c> is <c>&lt;data&gt;/config</c>), and a
+    /// user following the docs there lands in the wrong directory. So: prefer the primary
+    /// location, but accept the alternate when the user has populated only that one.
+    /// </remarks>
+    /// <param name="programDataPath">The server's data directory (Docker's <c>/config</c>).</param>
+    /// <param name="configurationDirectoryPath">The server's configuration directory.</param>
+    public static ThumbnailLocator Resolve(string programDataPath, string? configurationDirectoryPath)
+    {
+        var primary = new ThumbnailLocator(programDataPath);
+        if (Directory.Exists(primary.Root) || string.IsNullOrEmpty(configurationDirectoryPath))
+        {
+            return primary;
+        }
+
+        var alternate = new ThumbnailLocator(configurationDirectoryPath);
+        return Directory.Exists(alternate.Root) ? alternate : primary;
+    }
+
+    /// <summary>
     /// Gets the directory users drop artwork into, for display in the settings page.
     /// </summary>
     public string Root => _root;
@@ -72,15 +97,44 @@ public class ThumbnailLocator
     public string? Find(string tagNamespace, string value)
     {
         var directory = DirectoryFor(tagNamespace);
-        if (directory is null || !Directory.Exists(directory))
+        if (directory is null)
         {
             return null;
         }
 
+        return FindIn(directory, TagNormalizer.Slug(value));
+    }
+
+    /// <summary>
+    /// Returns the artwork file for a projection's <em>library</em> — the Origins tile on
+    /// the home screen rather than the India collection inside it — or null when the user
+    /// has supplied none.
+    /// </summary>
+    /// <remarks>
+    /// Library artwork sits at the root of the thumbnails tree, named after the namespace:
+    /// <c>&lt;config&gt;/tagsmith/thumbnails/origin.png</c> beside the <c>origin/</c>
+    /// directory that holds the per-value posters. Matching is by slug, same as values.
+    /// </remarks>
+    public string? FindLibrary(string tagNamespace)
+    {
+        // DirectoryFor is reused purely as the namespace validity check, so a namespace
+        // that would escape the tree can never name a root-level file either.
+        if (DirectoryFor(tagNamespace) is null)
+        {
+            return null;
+        }
+
+        return FindIn(_root, TagNormalizer.Slug(tagNamespace));
+    }
+
+    /// <summary>
+    /// Finds the artwork file in one directory whose stem slugifies to the wanted slug.
+    /// </summary>
+    private static string? FindIn(string directory, string wanted)
+    {
         // An empty slug would match every file whose stem also slugifies to nothing —
         // including the ".png" dotfile Store used to be able to write.
-        var wanted = TagNormalizer.Slug(value);
-        if (wanted.Length == 0)
+        if (wanted.Length == 0 || !Directory.Exists(directory))
         {
             return null;
         }
@@ -115,8 +169,31 @@ public class ThumbnailLocator
             return null;
         }
 
+        return StoreIn(directory, TagNormalizer.Slug(value), source);
+    }
+
+    /// <summary>
+    /// Copies an image into the thumbnails folder as the stored artwork for a projection's
+    /// library tile, replacing whatever was there. The library counterpart of
+    /// <see cref="Store"/>; see <see cref="FindLibrary"/> for where the file lives.
+    /// </summary>
+    /// <returns>The path written, or null when the namespace is unusable.</returns>
+    public string? StoreLibrary(string tagNamespace, string source)
+    {
+        if (DirectoryFor(tagNamespace) is null)
+        {
+            return null;
+        }
+
+        return StoreIn(_root, TagNormalizer.Slug(tagNamespace), source);
+    }
+
+    /// <summary>
+    /// Writes artwork into one directory under a slug, deleting competing variants first.
+    /// </summary>
+    private static string? StoreIn(string directory, string slug, string source)
+    {
         // A value like `origin=!!!` slugifies to nothing, which would write "<dir>/.png".
-        var slug = TagNormalizer.Slug(value);
         if (slug.Length == 0)
         {
             return null;
@@ -124,7 +201,7 @@ public class ThumbnailLocator
 
         Directory.CreateDirectory(directory);
 
-        // Replace any existing artwork for this value, whatever extension it used, so one
+        // Replace any existing artwork for this slug, whatever extension it used, so one
         // value never ends up with two competing files.
         foreach (var stale in Directory.EnumerateFiles(directory))
         {

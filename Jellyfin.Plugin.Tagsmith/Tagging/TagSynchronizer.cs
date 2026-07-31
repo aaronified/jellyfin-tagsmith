@@ -111,11 +111,13 @@ public class TagSynchronizer
     /// namespace or separator that produced it changes.
     /// </summary>
     /// <remarks>
-    /// A dry run does not persist. It used to, which was the one thing a dry run wrote: a
-    /// prefix is a claim of ownership over every tag carrying it, and recording that claim
-    /// from a run whose whole purpose is to change nothing means an aborted experiment
-    /// leaves Tagsmith deleting tags it was only ever asked to describe. The in-memory set
-    /// is still updated so the log shows the prefixes the run pruned against.
+    /// A dry run neither persists nor touches the live configuration object. It used to
+    /// persist, which was the one thing a dry run wrote: a prefix is a claim of ownership
+    /// over every tag carrying it, and recording that claim from a run whose whole purpose
+    /// is to change nothing means an aborted experiment leaves Tagsmith deleting tags it
+    /// was only ever asked to describe. Mutating the in-memory array without saving is the
+    /// same bug on a delay — the configuration singleton outlives the run, and the next
+    /// unrelated <c>SaveConfiguration()</c> would persist the dry-run claim with it.
     /// </remarks>
     private void RememberPrefixes(PluginConfiguration configuration, IEnumerable<string> activePrefixes)
     {
@@ -128,20 +130,21 @@ public class TagSynchronizer
             return;
         }
 
-        configuration.KnownPrefixes = known.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray();
+        var updated = known.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray();
 
         if (configuration.DryRun)
         {
             _logger.LogInformation(
                 "[dry-run] Tagsmith would start managing prefixes: {Prefixes}",
-                string.Join(", ", configuration.KnownPrefixes));
+                string.Join(", ", updated));
             return;
         }
 
+        configuration.KnownPrefixes = updated;
         Plugin.Instance?.SaveConfiguration();
         _logger.LogInformation(
             "Tagsmith now manages prefixes: {Prefixes}",
-            string.Join(", ", configuration.KnownPrefixes));
+            string.Join(", ", updated));
     }
 
     private static bool IsManaged(string tag, HashSet<string> managedPrefixes) =>

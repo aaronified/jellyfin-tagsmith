@@ -32,31 +32,10 @@ public class CollectionProjector
 {
     private readonly ILibraryManager _libraryManager;
     private readonly ICollectionManager _collectionManager;
-    private readonly IProviderManager _providerManager;
+    private readonly ArtworkSynchronizer _artwork;
     private readonly IFileSystem _fileSystem;
     private readonly IApplicationPaths _paths;
     private readonly ILogger<CollectionProjector> _logger;
-
-    /// <summary>
-    /// Serialises everything that reads or writes artwork state: the two hashes on a
-    /// <see cref="ManagedCollection"/>, <see cref="_applyingArtwork"/>, and the
-    /// <c>SaveConfiguration</c> that follows. The projection runs on a scheduled task thread,
-    /// the adoption listener on Jellyfin's event-dispatch thread, and the two share one
-    /// configuration object.
-    /// </summary>
-    /// <remarks>
-    /// Never held across the image save itself. Holding it there would risk a hang if a
-    /// future server version raised <c>ItemUpdated</c> from inside <c>SaveImage</c> on
-    /// another thread, and it is not needed: the marker covers that window instead.
-    /// </remarks>
-    private readonly object _configurationGate = new();
-
-    /// <summary>
-    /// Box sets Tagsmith is applying a poster to right now, so the <c>ItemUpdated</c>
-    /// listener can tell Tagsmith's own image update from somebody else's. Read and written
-    /// only under <see cref="_configurationGate"/>. See <see cref="AdoptPoster"/>.
-    /// </summary>
-    private readonly HashSet<Guid> _applyingArtwork = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CollectionProjector"/> class.
@@ -64,14 +43,14 @@ public class CollectionProjector
     public CollectionProjector(
         ILibraryManager libraryManager,
         ICollectionManager collectionManager,
-        IProviderManager providerManager,
+        ArtworkSynchronizer artwork,
         IFileSystem fileSystem,
         IApplicationPaths paths,
         ILogger<CollectionProjector> logger)
     {
         _libraryManager = libraryManager;
         _collectionManager = collectionManager;
-        _providerManager = providerManager;
+        _artwork = artwork;
         _fileSystem = fileSystem;
         _paths = paths;
         _logger = logger;
@@ -94,12 +73,18 @@ public class CollectionProjector
         {
             Configuration = configuration,
             DryRun = configuration.DryRun,
-            Thumbnails = new ThumbnailLocator(_paths.ProgramDataPath),
+            Pass = new ArtworkPass
+            {
+                Thumbnails = _artwork.ResolveThumbnails(),
+                DryRun = configuration.DryRun
+            },
 
-            // The heavy pass applies artwork to the collections it creates and to nothing
-            // else. It never adopts: a poster set in the library UI is captured the moment it
-            // is set, by PosterAdoptionListener, rather than waiting for the next full sync.
-            Artwork = ArtworkMode.NewCollections
+            // The heavy pass applies artwork wherever that cannot destroy user intent: the
+            // collections it creates, anything with no poster at all, and its own posters
+            // gone stale because the source file changed. It never adopts: a poster set in
+            // the library UI is captured the moment it is set, by PosterAdoptionListener,
+            // rather than waiting for the next full sync.
+            Artwork = ArtworkMode.ScheduledRun
         };
 
         if (run.DryRun)
@@ -142,57 +127,112 @@ public class CollectionProjector
     /// a new set of images, or after an adoption you would rather undo. It reads the folder
     /// only; collections with no matching file keep what they have.
     /// </remarks>
-    public Task ReapplyArtworkAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    public async Task ReapplyArtworkAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
+        // Fully synchronous work, but async so cancellation and faults surface on the
+        // returned task rather than being thrown from the method itself.
+        await Task.Yield();
+
         var configuration = Plugin.Instance?.Configuration;
         if (configuration is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var run = new Run
         {
             Configuration = configuration,
             DryRun = configuration.DryRun,
-            Thumbnails = new ThumbnailLocator(_paths.ProgramDataPath),
+            Pass = new ArtworkPass
+            {
+                Thumbnails = _artwork.ResolveThumbnails(),
+                DryRun = configuration.DryRun
+            },
             Artwork = ArtworkMode.ReapplyFromFolder
         };
 
         var records = configuration.ManagedCollections;
-        if (records.Length == 0)
+        var libraries = configuration.ManagedLibraries;
+        var total = records.Length + libraries.Length;
+
+        if (total == 0)
         {
             _logger.LogInformation("Tagsmith: no projected collections to apply artwork to");
-            return Task.CompletedTask;
+            return;
         }
 
         _logger.LogInformation(
-            "Tagsmith: reapplying artwork from {Folder} to {Count} collections",
-            run.Thumbnails.Root,
-            records.Length);
+            "Tagsmith: reapplying artwork from {Folder} to {Count} collections and {Libraries} libraries",
+            run.Pass.Thumbnails.Root,
+            records.Length,
+            libraries.Length);
 
         try
         {
-            for (var i = 0; i < records.Length; i++)
+            var done = 0;
+
+            // The library tiles first, then every collection. Both go through the same
+            // policy; ReapplyFromFolder forces the folder onto whatever poster is there.
+            foreach (var library in libraries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                SyncLibraryArtwork(library, createdThisRun: false, run);
+                progress?.Report(100.0 * ++done / total);
+            }
+
+            foreach (var record in records)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var record = records[i];
-                var boxSet = Resolve(record);
-
-                if (boxSet is not null)
+                if (Resolve(record) is { } boxSet)
                 {
-                    SyncArtwork(record, boxSet, TagGrouping.NamespaceFor(record.Kind, configuration), run, createdThisRun: false);
+                    SyncCollectionArtwork(record, boxSet, createdThisRun: false, run);
                 }
 
-                progress?.Report(100.0 * (i + 1) / records.Length);
+                progress?.Report(100.0 * ++done / total);
             }
         }
         finally
         {
             Persist(run);
         }
+    }
 
-        return Task.CompletedTask;
+    /// <summary>
+    /// Runs one collection's artwork through the policy for this trigger.
+    /// </summary>
+    private void SyncCollectionArtwork(ManagedCollection record, BaseItem boxSet, bool createdThisRun, Run run)
+    {
+        var tagNamespace = TagGrouping.NamespaceFor(record.Kind, run.Configuration);
+        if (string.IsNullOrWhiteSpace(tagNamespace))
+        {
+            return;
+        }
+
+        _artwork.Sync(run.Artwork, ArtworkTarget.Collection(boxSet, record, tagNamespace), createdThisRun, run.Pass);
+    }
+
+    /// <summary>
+    /// Runs one projection library's tile artwork through the policy for this trigger. The
+    /// tile file lives at the root of the thumbnails tree, named after the namespace —
+    /// <c>thumbnails/origin.png</c> for the Origins library.
+    /// </summary>
+    private void SyncLibraryArtwork(ManagedLibrary record, bool createdThisRun, Run run)
+    {
+        var tagNamespace = TagGrouping.NamespaceFor(record.Kind, run.Configuration);
+        if (string.IsNullOrWhiteSpace(tagNamespace) || !Guid.TryParse(record.ItemId, out var id))
+        {
+            return;
+        }
+
+        // The CollectionFolder is the item the dashboard itself puts library images on;
+        // anything else under that id is not a library Tagsmith should touch.
+        if (_libraryManager.GetItemById(id) is not CollectionFolder folder)
+        {
+            return;
+        }
+
+        _artwork.Sync(run.Artwork, ArtworkTarget.Library(folder, record, tagNamespace), createdThisRun, run.Pass);
     }
 
     private async Task ProjectKindAsync(
@@ -216,6 +256,14 @@ public class CollectionProjector
         if (library is null)
         {
             return;
+        }
+
+        // The library's own home-screen tile, before its collections: the tile is the first
+        // thing the user sees, and it follows exactly the same policy table the collection
+        // posters do.
+        if (run.Configuration.ManagedLibraries.FirstOrDefault(l => l.Kind == kind) is { } libraryRecord)
+        {
+            SyncLibraryArtwork(libraryRecord, library.Value.Created, run);
         }
 
         PruneDuplicateRecords(kind, run);
@@ -246,12 +294,14 @@ public class CollectionProjector
 
             if (boxSet is not null)
             {
-                // Membership only. The artwork on a collection that already existed is not
-                // this run's business: ArtworkPolicy returns None for it, and going anywhere
-                // near it would mean hashing a poster file per collection per night for no
-                // reason. See SyncArtwork.
+                // Membership, then artwork through the same policy as everything else. The
+                // policy applies the folder to an existing collection only when it has no
+                // poster or when Tagsmith's own poster went stale because the file changed —
+                // a poster the user set by hand is never touched here. This is what makes
+                // "drop images into the folder, run a sync" work for collections that
+                // already existed, which is how the folder is documented to behave.
                 await SyncMembersAsync(boxSet, members, run, cancellationToken).ConfigureAwait(false);
-                SyncArtwork(record!, boxSet, tagNamespace, run, createdThisRun: false);
+                SyncCollectionArtwork(record!, boxSet, createdThisRun: false, run);
                 continue;
             }
 
@@ -264,7 +314,7 @@ public class CollectionProjector
 
         if (pending.Count > 0)
         {
-            await ResolveNewCollectionsAsync(library.Value, pending, tagNamespace, run, cancellationToken)
+            await ResolveNewCollectionsAsync(library.Value, pending, run, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -505,7 +555,6 @@ public class CollectionProjector
     private async Task ResolveNewCollectionsAsync(
         LibraryHandle library,
         List<PendingCollection> pending,
-        string tagNamespace,
         Run run,
         CancellationToken cancellationToken)
     {
@@ -546,322 +595,8 @@ public class CollectionProjector
 
             _logger.LogInformation("Tagsmith: created collection {Name} at {Path}", boxSet.Name, entry.Path);
 
-            SyncArtwork(entry.Record, boxSet, tagNamespace, run, createdThisRun: true);
+            SyncCollectionArtwork(entry.Record, boxSet, createdThisRun: true, run);
         }
-    }
-
-    // ---------------------------------------------------------------- artwork
-
-    /// <summary>
-    /// Adopts the poster now on a collection into the thumbnails folder. Called by
-    /// <see cref="PosterAdoptionListener"/> the moment somebody sets one.
-    /// </summary>
-    /// <param name="item">The item Jellyfin reported an image update for.</param>
-    /// <remarks>
-    /// <para>
-    /// Runs on Jellyfin's own event-dispatch thread, so it does the least it can: type check,
-    /// a lookup in <c>ManagedCollections</c>, and for the one item in a library that matches,
-    /// a hash and a file copy. Nothing is queued to a worker — see the loop guard below for
-    /// why moving the work off this thread would break it.
-    /// </para>
-    /// <para>
-    /// <b>Loop guard.</b> Applying artwork writes to the collection, and writing to the
-    /// collection can produce an image update of its own, which would land back here and copy
-    /// Tagsmith's own poster over the user's source file. Two things stop that.
-    /// </para>
-    /// <para>
-    /// Adoption only ever writes into the thumbnails folder, never to the collection, so it
-    /// raises no image update and cannot re-trigger itself. At most one update exists per
-    /// apply; the two directions cannot ping-pong.
-    /// </para>
-    /// <para>
-    /// And that one update cannot be mistaken for user intent.
-    /// <see cref="ApplyStoredArtwork"/> adds the box set id to <see cref="_applyingArtwork"/>
-    /// under <see cref="_configurationGate"/> before it writes anything, and removes it again
-    /// under the same gate in the same step that records
-    /// <see cref="ManagedCollection.AppliedImageHash"/>. Everything below reads and decides
-    /// under that gate too, so it sees one of three states and never a state in between:
-    /// before the apply, in which case the poster it adopts is genuinely the user's; during
-    /// it, in which case the marker is present and it stands off; or after it, in which case
-    /// the hash comparison in <see cref="CaptureManualPoster"/> recognises Tagsmith's own
-    /// poster and rejects it. This is also why the work is done inline rather than queued:
-    /// a worker would run after the gate had been released and the marker dropped.
-    /// </para>
-    /// </remarks>
-    public void AdoptPoster(BaseItem? item)
-    {
-        // The event fires for every item in the library, so bail out on the cheapest test
-        // first. Only a BoxSet can be one of Tagsmith's collections.
-        if (item is not BoxSet)
-        {
-            return;
-        }
-
-        var configuration = Plugin.Instance?.Configuration;
-        if (configuration is null)
-        {
-            return;
-        }
-
-        // Ownership is by recorded id, exactly as everywhere else: a box set the user made
-        // themselves is never touched, whatever it is called.
-        var record = Array.Find(
-            configuration.ManagedCollections,
-            c => Guid.TryParse(c.Id, out var id) && id.Equals(item.Id));
-
-        if (record is null)
-        {
-            return;
-        }
-
-        var tagNamespace = TagGrouping.NamespaceFor(record.Kind, configuration);
-        if (string.IsNullOrWhiteSpace(tagNamespace))
-        {
-            return;
-        }
-
-        var run = new Run
-        {
-            Configuration = configuration,
-            DryRun = configuration.DryRun,
-            Thumbnails = new ThumbnailLocator(_paths.ProgramDataPath),
-            Artwork = ArtworkMode.AdoptOnly
-        };
-
-        // Configuration is shared with whatever projection run may be going on, and both
-        // sides read-modify-write the same record and then serialise the whole file. The read
-        // of the poster, the decision and the write all have to sit inside one critical
-        // section, or the marker check below can be answered from before an apply that has
-        // started by the time the poster is read.
-        lock (_configurationGate)
-        {
-            if (_applyingArtwork.Contains(item.Id))
-            {
-                // Tagsmith's own SaveImage, still in flight. Adopting here would copy the
-                // poster Tagsmith just applied back over the file it read it from.
-                return;
-            }
-
-            SyncArtwork(record, item, tagNamespace, run, createdThisRun: false);
-            Persist(run);
-        }
-    }
-
-    /// <summary>
-    /// Does whatever this run's trigger is supposed to do about one collection's artwork.
-    /// </summary>
-    /// <remarks>
-    /// The three triggers do one thing each and do not overlap: the scheduled run applies the
-    /// thumbnails folder to the collections it just created, the <c>ItemUpdated</c> listener
-    /// adopts a poster somebody else set, and the reapply action forces the folder onto
-    /// everything. <see cref="ArtworkPolicy"/> holds that table; this method only carries it
-    /// out.
-    /// </remarks>
-    private void SyncArtwork(
-        ManagedCollection record,
-        BaseItem boxSet,
-        string tagNamespace,
-        Run run,
-        bool createdThisRun)
-    {
-        switch (ArtworkPolicy.Decide(run.Artwork, createdThisRun))
-        {
-            case ArtworkAction.Apply:
-                ApplyStoredArtwork(record, boxSet, tagNamespace, run, force: false);
-                break;
-
-            case ArtworkAction.Reapply:
-                ApplyStoredArtwork(record, boxSet, tagNamespace, run, force: true);
-                break;
-
-            case ArtworkAction.Adopt:
-                CaptureManualPoster(record, boxSet, tagNamespace, run);
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Copies the file in the thumbnails folder onto the collection.
-    /// </summary>
-    /// <param name="force">
-    /// Apply even when the file is the one Tagsmith last applied. Set by the reapply action,
-    /// whose whole point is to discard whatever poster is on the collection.
-    /// </param>
-    private void ApplyStoredArtwork(
-        ManagedCollection record,
-        BaseItem boxSet,
-        string tagNamespace,
-        Run run,
-        bool force)
-    {
-        var file = run.Thumbnails.Find(tagNamespace, record.Value);
-        if (file is null)
-        {
-            return;
-        }
-
-        var hash = ThumbnailLocator.Hash(file);
-        if (!force && string.Equals(record.ImageHash, hash, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        if (run.DryRun)
-        {
-            _logger.LogInformation(
-                "Tagsmith: [dry-run] would apply artwork {File} to {Name}",
-                Path.GetFileName(file),
-                boxSet.Name);
-            return;
-        }
-
-        // Claimed before anything is written and released only once the record says what
-        // landed, both under the gate the adoption listener decides under. That is what
-        // leaves it no state to misread — see the loop guard on AdoptPoster. The gate is
-        // deliberately not held across the save itself.
-        lock (_configurationGate)
-        {
-            _applyingArtwork.Add(boxSet.Id);
-        }
-
-        try
-        {
-            using (var stream = File.OpenRead(file))
-            {
-                _providerManager
-                    .SaveImage(boxSet, stream, ThumbnailLocator.MimeTypeOf(file), ImageType.Primary, null, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-            }
-
-            // SaveImage writes the file and calls SetImagePath, which mutates ImageInfos in
-            // memory only — it never touches the repository. Without this the poster is lost
-            // on restart. ImageController does the same thing after its own SaveImage.
-            boxSet.UpdateToRepositoryAsync(ItemUpdateType.ImageUpdate, CancellationToken.None)
-                .GetAwaiter()
-                .GetResult();
-
-            lock (_configurationGate)
-            {
-                record.ImageHash = hash;
-
-                // The server re-encodes on save, so the bytes on the item are not the bytes
-                // in the thumbnails folder. Record what actually landed, or Tagsmith reads
-                // its own poster as user intent and copies it back over the source file.
-                record.AppliedImageHash = CurrentPosterHash(boxSet) ?? string.Empty;
-                _applyingArtwork.Remove(boxSet.Id);
-            }
-
-            run.Dirty = true;
-
-            _logger.LogInformation("Tagsmith: applied artwork {File} to {Name}", Path.GetFileName(file), boxSet.Name);
-        }
-        catch (IOException ex)
-        {
-            _logger.LogWarning(ex, "Tagsmith: could not apply artwork {File}", file);
-        }
-        finally
-        {
-            // Already gone on the happy path. A failed save must not leave the box set
-            // marked, or its poster could never be adopted again.
-            lock (_configurationGate)
-            {
-                _applyingArtwork.Remove(boxSet.Id);
-            }
-        }
-    }
-
-    /// <summary>
-    /// If the collection carries a poster Tagsmith did not put there, copy it into the
-    /// thumbnails folder and adopt it. Returns true when a capture happened, or would have.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// "Tagsmith did not put there" is decided against <see cref="ManagedCollection.AppliedImageHash"/>,
-    /// not against the source file's hash. Collections are also created locked, which keeps
-    /// Jellyfin's remote image providers off them entirely
-    /// (<c>ProviderManager.CanRefreshImages</c> returns false for a locked item outside a
-    /// forced full refresh) — otherwise a provider-supplied poster would look exactly like a
-    /// hand-set one and would be written over the user's curated artwork file.
-    /// </para>
-    /// <para>
-    /// That comparison is the standing half of the loop guard, and it holds no matter how long
-    /// after the fact an image update arrives. It writes into the thumbnails folder only, never
-    /// to the collection, so adoption raises no image update of its own and cannot re-trigger
-    /// itself.
-    /// </para>
-    /// </remarks>
-    private bool CaptureManualPoster(
-        ManagedCollection record,
-        BaseItem boxSet,
-        string tagNamespace,
-        Run run)
-    {
-        var image = boxSet.GetImageInfo(ImageType.Primary, 0);
-        if (image?.Path is null || !File.Exists(image.Path))
-        {
-            return false;
-        }
-
-        var currentHash = ThumbnailLocator.Hash(image.Path);
-
-        if (string.Equals(record.AppliedImageHash, currentHash, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        // Records written before 0.0.5 kept only one hash; treat a match as ours.
-        if (string.IsNullOrEmpty(record.AppliedImageHash)
-            && string.Equals(record.ImageHash, currentHash, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        if (run.DryRun)
-        {
-            _logger.LogInformation(
-                "Tagsmith: [dry-run] would adopt the poster on {Name} into the thumbnails folder",
-                boxSet.Name);
-            return true;
-        }
-
-        try
-        {
-            var destination = run.Thumbnails.Store(tagNamespace, record.Value, image.Path);
-            if (destination is null)
-            {
-                _logger.LogWarning(
-                    "Tagsmith: cannot store artwork for {Namespace}/{Value}; check the namespace setting",
-                    tagNamespace,
-                    record.Value);
-                return false;
-            }
-
-            record.ImageHash = ThumbnailLocator.Hash(destination);
-            record.AppliedImageHash = currentHash;
-            run.Dirty = true;
-
-            _logger.LogInformation(
-                "Tagsmith: adopted the poster on {Name} into {File}",
-                boxSet.Name,
-                destination);
-
-            return true;
-        }
-        catch (IOException ex)
-        {
-            _logger.LogWarning(ex, "Tagsmith: could not capture the poster on {Name}", boxSet.Name);
-            return false;
-        }
-    }
-
-    private static string? CurrentPosterHash(BaseItem boxSet)
-    {
-        var image = boxSet.GetImageInfo(ImageType.Primary, 0);
-        return image?.Path is not null && File.Exists(image.Path) ? ThumbnailLocator.Hash(image.Path) : null;
     }
 
     // ---------------------------------------------------------------- libraries
@@ -995,7 +730,7 @@ public class CollectionProjector
         ];
         run.Dirty = true;
 
-        return new LibraryHandle(created.ItemId, created.Name ?? plan.Name, mediaPath);
+        return new LibraryHandle(created.ItemId, created.Name ?? plan.Name, mediaPath, Created: true);
     }
 
     private LibraryHandle? Adopt(ProjectionKind kind, LibraryPlan plan, string mediaPath, Run run)
@@ -1409,20 +1144,20 @@ public class CollectionProjector
 
     private void Persist(Run run)
     {
-        if (!run.Dirty || run.DryRun)
+        // Artwork changes track their dirtiness on the pass; everything else on the run.
+        // One save covers both — it is the same configuration object either way.
+        if ((!run.Dirty && !run.Pass.Dirty) || run.DryRun)
         {
             return;
         }
 
-        // Two threads serialising the same object into the same file is a corrupt
-        // configuration. Monitor is reentrant, so AdoptPoster taking the gate around its own
-        // call to this is fine.
-        lock (_configurationGate)
-        {
-            Plugin.Instance?.SaveConfiguration();
-        }
+        // Serialised on the artwork gate: the adoption listener saves the same object from
+        // Jellyfin's event thread, and two threads serialising into the same file is a
+        // corrupt configuration.
+        _artwork.PersistConfiguration();
 
         run.Dirty = false;
+        run.Pass.Dirty = false;
     }
 
     private static void Forget(ProjectionKind kind, Run run)
@@ -1455,7 +1190,12 @@ public class CollectionProjector
 
         public required bool DryRun { get; init; }
 
-        public required ThumbnailLocator Thumbnails { get; init; }
+        /// <summary>
+        /// Gets the artwork state this run carries: the resolved thumbnails folder and the
+        /// artwork-side dirty flag. Handed to <see cref="ArtworkSynchronizer"/> on every
+        /// artwork decision.
+        /// </summary>
+        public required ArtworkPass Pass { get; init; }
 
         /// <summary>
         /// Gets which of the three triggers this run is, which is the only thing that decides
@@ -1466,7 +1206,14 @@ public class CollectionProjector
         public bool Dirty { get; set; }
     }
 
-    private readonly record struct LibraryHandle(string ItemId, string Name, string MediaPath);
+    /// <param name="ItemId">The CollectionFolder id.</param>
+    /// <param name="Name">The library name as Jellyfin reports it.</param>
+    /// <param name="MediaPath">The projection's private media directory.</param>
+    /// <param name="Created">
+    /// Whether this run created the library, which is what entitles the run to put the
+    /// default tile artwork on it. See <see cref="ArtworkPolicy"/>.
+    /// </param>
+    private readonly record struct LibraryHandle(string ItemId, string Name, string MediaPath, bool Created = false);
 
     private readonly record struct PendingCollection(ManagedCollection Record, string Path);
 }

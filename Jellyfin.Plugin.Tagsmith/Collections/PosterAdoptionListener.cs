@@ -6,7 +6,7 @@ namespace Jellyfin.Plugin.Tagsmith.Collections;
 
 /// <summary>
 /// Adopts a poster into <c>&lt;config&gt;/tagsmith/thumbnails/</c> the moment somebody sets
-/// one on a collection Tagsmith owns.
+/// one on a collection or projection library Tagsmith owns.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,14 +18,14 @@ namespace Jellyfin.Plugin.Tagsmith.Collections;
 /// <para>
 /// <c>ILibraryManager.ItemUpdated</c> fires for every item in the library, so the handler is
 /// written to cost as close to nothing as possible for the items that are not collections
-/// Tagsmith made. The real work happens in <see cref="CollectionProjector.AdoptPoster"/>,
+/// Tagsmith made. The real work happens in <see cref="ArtworkSynchronizer.AdoptPoster"/>,
 /// which also documents why it must not be pushed onto a worker thread.
 /// </para>
 /// </remarks>
 public sealed class PosterAdoptionListener : IHostedService
 {
     private readonly ILibraryManager _libraryManager;
-    private readonly CollectionProjector _projector;
+    private readonly ArtworkSynchronizer _artwork;
     private readonly ILogger<PosterAdoptionListener> _logger;
 
     /// <summary>
@@ -33,11 +33,11 @@ public sealed class PosterAdoptionListener : IHostedService
     /// </summary>
     public PosterAdoptionListener(
         ILibraryManager libraryManager,
-        CollectionProjector projector,
+        ArtworkSynchronizer artwork,
         ILogger<PosterAdoptionListener> logger)
     {
         _libraryManager = libraryManager;
-        _projector = projector;
+        _artwork = artwork;
         _logger = logger;
     }
 
@@ -88,7 +88,7 @@ public sealed class PosterAdoptionListener : IHostedService
                 return;
             }
 
-            _projector.AdoptPoster(e.Item);
+            _artwork.AdoptPoster(e.Item);
         }
         catch (Exception ex)
         {
