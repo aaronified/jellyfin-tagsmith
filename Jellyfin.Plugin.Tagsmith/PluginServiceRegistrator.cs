@@ -25,6 +25,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Add further ITagProvider implementations here; all registered providers run for
         // every item and their tags are unioned.
         serviceCollection.AddSingleton<ITagProvider, CoreMetadataTagProvider>();
+        serviceCollection.AddSingleton<ITagProvider, AwardTagProvider>();
+        serviceCollection.AddSingleton<ITagProvider, ListTagProvider>();
         serviceCollection.AddSingleton<TagSynchronizer>();
         serviceCollection.AddSingleton<ArtworkSynchronizer>();
         serviceCollection.AddSingleton<CollectionProjector>();

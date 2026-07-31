@@ -69,25 +69,20 @@ public class CoreMetadataTagProvider : ITagProvider
 
         var namespaces = new List<string>();
 
-        if (configuration.EnableOrigin)
+        // A blank namespace is never claimed. The synchroniser guards this too, but a
+        // provider has no business returning a claim it will never write to.
+        void Claim(bool enabled, string tagNamespace)
         {
-            namespaces.Add(configuration.OriginNamespace);
+            if (enabled && !string.IsNullOrWhiteSpace(tagNamespace))
+            {
+                namespaces.Add(tagNamespace);
+            }
         }
 
-        if (configuration.EnableLanguage)
-        {
-            namespaces.Add(configuration.LanguageNamespace);
-        }
-
-        if (configuration.EnableAudioLanguage)
-        {
-            namespaces.Add(configuration.AudioLanguageNamespace);
-        }
-
-        if (configuration.EnableYear)
-        {
-            namespaces.Add(configuration.YearNamespace);
-        }
+        Claim(configuration.EnableOrigin, configuration.OriginNamespace);
+        Claim(configuration.EnableLanguage, configuration.LanguageNamespace);
+        Claim(configuration.EnableAudioLanguage, configuration.AudioLanguageNamespace);
+        Claim(configuration.EnableYear, configuration.YearNamespace);
 
         return namespaces;
     }

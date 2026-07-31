@@ -1,0 +1,2 @@
+# The embedded datasets are binary; never let text normalisation near them.
+*.gz binary

@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Hand-verified IMDb ids for titles the automatic Wikidata resolution in",
+    "generate-lists.mjs cannot match — title-case drift, translated titles, TMDb ids",
+    "Wikidata has not catalogued. Keys are exactly what the generator reports as",
+    "unresolved; every id here was verified against the Wikidata entity, not guessed."
+  ],
+  "sight_and_sound": {
+    "Taxi Driver (1976)": "tt0075314",
+    "Heat (1995)": "tt0113277",
+    "Blue (1993)": "tt0106438",
+    "Happy Together (1997)": "tt0118845",
+    "Earth (1930)": "tt0021571",
+    "The Intruder (2004)": "tt0422491",
+    "Fear Eats the Soul (1974)": "tt0071141",
+    "Histoire(s) du Cinéma (1988)": "tt6677224",
+    "Aguirre, Wrath of God (1972)": "tt0068182",
+    "Le Bonheur (1965)": "tt0058985",
+    "Twin Peaks: The Return (2017)": "tt4093826",
+    "Out 1 (1990)": "tt0246135",
+    "L' eclisse (1962)": "tt0056736",
+    "One Way or Another (1977)": "tt0075915",
+    "A Touch of Zen (1969)": "tt0064451",
+    "As I Was Moving Ahead, Occasionally I Saw Brief Glimpses of Beauty (2000)": "tt0262240",
+    "Harlan County USA (1976)": "tt0074605",
+    "Soleil Ô (1970)": "tt0062285"
+  },
+  "tspdt_1000": {
+    "tmdb:91296": "tt6677224",
+    "tmdb:43059": "tt0087400"
+  }
+}

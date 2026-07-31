@@ -73,6 +73,101 @@
                 </div>
 
                 <div class="verticalSection">
+                    <h2 class="sectionTitle">Awards</h2>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        From a dataset that ships inside the plugin — no network, matched by
+                        IMDb id. Academy Awards cover every ceremony since 1927/28; BAFTA,
+                        Golden Globes and Emmys come from Wikidata, whose film-side coverage
+                        is partial, skews recent, and is thinnest for acting and directing
+                        categories (Wikidata records those on the person, not the title).
+                        Nominations include the eventual winner, so a category's nominee set
+                        is complete on its own. Enabling a namespace hands it to Tagsmith
+                        entirely: tags you added by hand under it are managed — and pruned —
+                        like generated ones.
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="EnableAwards" />
+                        <span>Tag award wins, e.g. <code>award=oscar:best_picture</code></span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="AwardNamespace" label="Award namespace" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="EnableNominations" />
+                        <span>Tag nominations, e.g. <code>nomination=bafta:best_film</code></span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="NominationNamespace" label="Nomination namespace" />
+                    </div>
+
+                    <div class="fieldDescription" style="margin-top:1em;">Ceremonies:</div>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithCeremony" data-value="oscar" />
+                        <span>Academy Awards (<code>oscar:</code>)</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithCeremony" data-value="bafta" />
+                        <span>BAFTA Film Awards (<code>bafta:</code>)</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithCeremony" data-value="golden_globe" />
+                        <span>Golden Globes (<code>golden_globe:</code>)</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithCeremony" data-value="emmy" />
+                        <span>Primetime Emmys (<code>emmy:</code>)</span>
+                    </label>
+                </div>
+
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Curated lists</h2>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        <code>list=</code> tags for membership of well-known lists, matched by
+                        IMDb id from a dataset inside the plugin. The lists are snapshots taken
+                        when the plugin release was built. Selecting none turns the namespace
+                        off. Selecting any hands the whole <code>list=</code> namespace to
+                        Tagsmith: hand-made tags under it (say <code>list=to_watch</code>) are
+                        managed — and pruned — like generated ones, so keep personal lists in
+                        a namespace of their own.
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="ListNamespace" label="List namespace" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithList" data-value="imdb_top_250" />
+                        <span>IMDb Top 250</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithList" data-value="sight_and_sound" />
+                        <span>Sight &amp; Sound 2022 critics' poll</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithList" data-value="afi_100" />
+                        <span>AFI's 100 Years…100 Movies (2007)</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithList" data-value="bfi_top_100" />
+                        <span>BFI Top 100 British films</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithList" data-value="national_film_registry" />
+                        <span>National Film Registry</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithList" data-value="criterion_collection" />
+                        <span>The Criterion Collection</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" class="tagsmithList" data-value="tspdt_1000" />
+                        <span>They Shoot Pictures, Don't They? Top 1000</span>
+                    </label>
+                </div>
+
+                <div class="verticalSection">
                     <h2 class="sectionTitle">External metadata</h2>
 
                     <label class="checkboxContainer">
@@ -229,11 +324,16 @@
         (function () {
             var pluginId = '4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84';
             var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'AudioLanguageNamespace',
-                'YearNamespace', 'OriginLibraryName', 'LanguageLibraryName', 'YearLibraryName'];
+                'YearNamespace', 'AwardNamespace', 'NominationNamespace', 'ListNamespace',
+                'OriginLibraryName', 'LanguageLibraryName', 'YearLibraryName'];
             var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableAudioLanguage',
-                'EnableYear', 'UseExternalMetadata', 'RemoveObsoleteTags', 'DryRun',
+                'EnableYear', 'EnableAwards', 'EnableNominations', 'UseExternalMetadata',
+                'RemoveObsoleteTags', 'DryRun',
                 'ProjectOrigin', 'ProjectLanguage', 'ProjectYear', 'RemoveCollectionsWhenDisabled'];
             var listFields = ['Aliases', 'KnownPrefixes'];
+            // Arrays backed by groups of checkboxes rather than a textarea; the data-value
+            // attribute is the value stored in the configuration array.
+            var checkGroups = { AwardCeremonies: '.tagsmithCeremony', EnabledLists: '.tagsmithList' };
             var taskKey = 'TagsmithSync';
             var artworkTaskKey = 'TagsmithReapplyArtwork';
 
@@ -259,6 +359,12 @@
                     listFields.forEach(function (id) {
                         document.querySelector('#' + id).value = toLines(config[id]);
                     });
+                    Object.keys(checkGroups).forEach(function (key) {
+                        var values = config[key] || [];
+                        document.querySelectorAll(checkGroups[key]).forEach(function (box) {
+                            box.checked = values.indexOf(box.getAttribute('data-value')) >= 0;
+                        });
+                    });
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -275,6 +381,13 @@
                     });
                     listFields.forEach(function (id) {
                         config[id] = fromLines(document.querySelector('#' + id).value);
+                    });
+                    Object.keys(checkGroups).forEach(function (key) {
+                        var values = [];
+                        document.querySelectorAll(checkGroups[key]).forEach(function (box) {
+                            if (box.checked) values.push(box.getAttribute('data-value'));
+                        });
+                        config[key] = values;
                     });
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);

@@ -43,6 +43,15 @@ public class TagSynchronizer
         {
             foreach (var ns in provider.Namespaces(configuration))
             {
+                // A blank namespace or separator must never become a prefix. The prefix is
+                // a claim of ownership decided by StartsWith, and the degenerate claims are
+                // catastrophic: "" owns every tag in the library, and a namespace with no
+                // separator owns every tag that merely begins with the same letters.
+                if (string.IsNullOrWhiteSpace(ns) || string.IsNullOrWhiteSpace(configuration.Separator))
+                {
+                    continue;
+                }
+
                 activePrefixes.Add(ns + configuration.Separator);
             }
 
@@ -147,6 +156,13 @@ public class TagSynchronizer
             string.Join(", ", updated));
     }
 
+    /// <summary>
+    /// Whether a tag carries one of the managed prefixes. A blank prefix — which a
+    /// hand-edited configuration file could still contain — matches nothing rather than
+    /// everything; "" would otherwise claim, and delete, every tag in the library.
+    /// </summary>
     private static bool IsManaged(string tag, HashSet<string> managedPrefixes) =>
-        managedPrefixes.Any(prefix => tag.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        managedPrefixes.Any(prefix =>
+            !string.IsNullOrWhiteSpace(prefix)
+            && tag.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 }

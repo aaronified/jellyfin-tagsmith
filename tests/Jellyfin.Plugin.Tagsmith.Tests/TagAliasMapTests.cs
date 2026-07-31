@@ -36,6 +36,35 @@ public class TagAliasMapTests
         Assert.Equal("list=us", map.Apply("list=united_states", "="));
     }
 
+    // ------------------------------------------------------------ structured values
+
+    [Fact]
+    public void An_award_value_keeps_its_colon_structure_through_a_scoped_rule()
+    {
+        // award= values are ceremony:category; a rule must be able to target them without
+        // the colon being folded into an underscore by normalisation.
+        var map = TagAliasMap.Parse(["award:oscar:best_picture => oscar:bp"]);
+
+        Assert.Equal("award=oscar:bp", map.Apply("award=oscar:best_picture", "="));
+        Assert.Equal("nomination=oscar:best_picture", map.Apply("nomination=oscar:best_picture", "="));
+    }
+
+    [Fact]
+    public void A_structured_rule_normalises_each_segment()
+    {
+        var map = TagAliasMap.Parse(["award:Oscar:Best Picture => Oscar:BP"]);
+
+        Assert.Equal("award=oscar:bp", map.Apply("award=oscar:best_picture", "="));
+    }
+
+    [Fact]
+    public void A_structured_value_can_be_dropped()
+    {
+        var map = TagAliasMap.Parse(["nomination:emmy:best_drama_series =>"]);
+
+        Assert.Null(map.Apply("nomination=emmy:best_drama_series", "="));
+    }
+
     [Theory]
     [InlineData("# a comment")]
     [InlineData("")]

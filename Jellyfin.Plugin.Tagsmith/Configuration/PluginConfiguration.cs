@@ -75,6 +75,48 @@ public class PluginConfiguration : BasePluginConfiguration
     public string YearNamespace { get; set; } = "year";
 
     /// <summary>
+    /// Gets or sets a value indicating whether award-winner tags are written, e.g.
+    /// <c>award=oscar:best_picture</c>. Off by default.
+    /// </summary>
+    public bool EnableAwards { get; set; }
+
+    /// <summary>
+    /// Gets or sets the namespace used for award wins.
+    /// </summary>
+    public string AwardNamespace { get; set; } = "award";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether nomination tags are written, e.g.
+    /// <c>nomination=bafta:best_film</c>. Nominations include the eventual winner, so the
+    /// nominee set for a category is complete on its own. Off by default.
+    /// </summary>
+    public bool EnableNominations { get; set; }
+
+    /// <summary>
+    /// Gets or sets the namespace used for award nominations.
+    /// </summary>
+    public string NominationNamespace { get; set; } = "nomination";
+
+    /// <summary>
+    /// Gets or sets which ceremonies produce award and nomination tags. Values are the
+    /// ceremony slugs used in tag values: <c>oscar</c>, <c>bafta</c>, <c>golden_globe</c>,
+    /// <c>emmy</c>.
+    /// </summary>
+    public string[] AwardCeremonies { get; set; } = ["oscar", "bafta", "golden_globe", "emmy"];
+
+    /// <summary>
+    /// Gets or sets which curated lists produce <c>list=</c> tags, by list slug (e.g.
+    /// <c>imdb_top_250</c>, <c>criterion_collection</c>). Empty — the default — turns the
+    /// namespace off.
+    /// </summary>
+    public string[] EnabledLists { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the namespace used for curated-list membership.
+    /// </summary>
+    public string ListNamespace { get; set; } = "list";
+
+    /// <summary>
     /// Gets or sets a value indicating whether managed tags no longer produced by any
     /// provider are stripped from items.
     /// </summary>
