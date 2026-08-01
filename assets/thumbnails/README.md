@@ -9,12 +9,18 @@ Download the set you want, or make your own.
 
 | Path | Covers | Files |
 | --- | --- | --- |
-| `origin/` | Country flags | 7 |
+| `origin/` | Countries, including three historical states | 206 |
 | `lang/` | Languages, named in their own script | 31 |
 | `year/` | Decades, 1920s to 2020s — a curated retro set | 11 |
 | `origin.png`, `lang.png`, `year.png` | The libraries' own home-screen tiles | 3 |
 
-Generated posters are 400x600 PNGs and the curated decade posters 1000x1500 — both
+[`../placeholders/`](../placeholders/) holds the **complete** set for these three namespaces:
+the curated posters as they stood when it was last refreshed, plus a solid colour block for
+every remaining collection. Install that tree instead of this one if you would rather every
+collection had *something*. Its `origin/` predates the 206-country set here, so take
+countries from this tree rather than that one. See its README.
+
+The language posters are 400x600 PNGs and the country and decade posters 1000x1500 — both
 Jellyfin's 2:3 poster aspect. The library tiles are 960x540 — the 16:9 shape of the home
 screen's "My Media" cards — and sit at the root of the tree, named after the *namespace*
 rather than a tag value.
@@ -70,45 +76,39 @@ The stems here are the canonical tag values, so a file drops in and matches with
 renaming. To cover a value that is not in the set, name the file after the tag value as
 Tagsmith writes it — check the collection name in Jellyfin if you are unsure.
 
-## Regenerating
+## Maintaining
 
-```bash
-npm --prefix scripts install
-node scripts/generate-artwork.mjs
-```
+Nothing here is generated. This set was previously rebuilt by
+`scripts/generate-artwork.mjs`, which has been removed now that `origin/` holds real
+artwork rather than machine-drawn flags — so **these files are the only copy**. Adding,
+replacing or removing a poster means editing this tree directly, and there is no step
+that will recreate one. Get the filename right: see [Naming](#naming) below, because the
+stem is what decides whether Tagsmith ever loads the file.
 
-`scripts/generate-artwork.mjs` rebuilds the `origin/` and `lang/` folders and the three
-library tiles from scratch, and verifies that each file came out at its intended size
-with something actually drawn on it, and that the face assigned to each language actually
-carries that language's characters. The `year/` posters are the one **curated** set — the
-generator verifies they are present but never rewrites them, so replacing a decade poster
-is just replacing the file. Add a country or language by editing the tables near the top
-of the script — the filename is derived from the display name using the same slug rules
-as the C# side, so it stays correct by construction. A language whose writing system is
-not already in the `SCRIPTS` table needs one row there and one `@fontsource` dependency
-in `scripts/package.json` as well.
-
-The complex scripts rely on the shaper: conjuncts, reordered vowel signs and cursive
-joining are all resolved by HarfBuzz inside Skia, which is what `@napi-rs/canvas` draws
-through. If you swap the canvas for one that only maps codepoints to glyphs, Indic and
-Perso-Arabic names will come out plausible-looking but wrong — detached matras, unformed
-conjuncts, letters in isolated instead of joined forms — so re-check the output by eye
-rather than trusting that it is non-blank.
+The `lang/` posters were machine-rendered while that script existed, with their text
+shaped by HarfBuzz inside Skia. If you redraw one, mind that the complex scripts depend
+on the shaper: conjuncts, reordered vowel signs and cursive joining are all resolved
+there. Tooling that only maps codepoints to glyphs will produce plausible-looking but
+wrong Indic and Perso-Arabic names — detached matras, unformed conjuncts, letters in
+isolated instead of joined forms — so check the output by eye rather than trusting that
+it is non-blank.
 
 ## Licence and attribution
 
-- **Flags** — [`flag-icons`](https://github.com/lipis/flag-icons) by Panayiotis Lipiridis,
-  MIT licensed. Drawn flat and unmodified apart from scaling; the blurred backdrop on each
-  poster is a copy of the same artwork. Flag designs themselves are national symbols and
-  are not copyrightable in most jurisdictions, but the MIT notice covers the SVG set.
+- **The `origin/` posters** — supplied artwork, not drawn in this repository. Each carries a
+  national motif and a small flag chip. **The provenance of that source material is not
+  recorded yet, so this line still needs filling in.** The `flag-icons` (MIT) notice that
+  used to sit here covered the seven generated flag posters this set replaced, and no longer
+  describes anything in this folder.
 - **Type** — the Noto Sans family: Noto Sans, Noto Sans JP, Noto Sans SC, and Noto Sans
   Arabic, Bengali, Devanagari, Gujarati, Gurmukhi, Kannada, Malayalam, Ol Chiki, Oriya,
   Tamil and Telugu. All under the [SIL Open Font License 1.1](https://openfontlicense.org/),
-  obtained at build time via the `@fontsource` packages. Only rendered output ships here;
-  no font files are redistributed in this folder.
+  and covering the `lang/` posters and the three library tiles. Only rendered output ships
+  here; no font files are redistributed in this folder.
 
   Urdu and Kashmiri are set in Noto Sans Arabic (Naskh) rather than Noto Nastaliq Urdu.
   Nastaliq is the better face for either language on its own, but its steeply cascading
   baseline will not share a fixed hero centre with fourteen upright Noto Sans faces, and
   Sindhi is conventionally set in Naskh regardless.
-- **The posters** — MIT, same as the rest of this repository.
+- **The `lang/` and `year/` posters and the three tiles** — MIT, same as the rest of this
+  repository.

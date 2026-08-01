@@ -23,13 +23,11 @@ dotnet test tests/Jellyfin.Plugin.Tagsmith.Tests
 # If the machine lacks the .NET 9 runtime, tests run with:
 DOTNET_ROLL_FORWARD=LatestMajor dotnet test tests/Jellyfin.Plugin.Tagsmith.Tests
 
-# Regenerate the embedded datasets and starter artwork (needs Node; all but
-# countries hit the network)
+# Regenerate the embedded datasets (needs Node; all but countries hit the network)
 npm --prefix scripts install
 node scripts/generate-countries.mjs
 node scripts/generate-awards.mjs
 node scripts/generate-lists.mjs
-node scripts/generate-artwork.mjs
 ```
 
 ## Ground rules
@@ -44,6 +42,9 @@ node scripts/generate-artwork.mjs
 - **The country dictionary is generated, not hand-edited.** Change
   `scripts/country-aliases-extra.json` or the generator and regenerate. Never edit
   `Data/countries.json.gz`.
+- **Collection artwork is hand-maintained, not generated.** There is no artwork generator
+  any more; `assets/` is a set of files, edited directly. Do not write one that rebuilds
+  `assets/thumbnails/<namespace>/` from scratch — the posters there are the only copy.
 
 ## Layout
 

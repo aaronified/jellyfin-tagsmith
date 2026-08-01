@@ -129,7 +129,7 @@ Jellyfin.Plugin.Tagsmith/
     TagSyncTask.cs               full-library pass, then projection; nightly at 04:00
     ReapplyArtworkTask.cs        the reapply button, forces folder -> collections + tiles
 assets/thumbnails/               starter artwork, downloaded separately
-scripts/                         generators: countries, artwork, awards, lists
+scripts/                         generators: countries, awards, lists
 tests/                           xunit suite
 ```
 
@@ -148,8 +148,10 @@ npm --prefix scripts install          # once, for all generators
 node scripts/generate-countries.mjs   # CLDR country dictionary
 node scripts/generate-awards.mjs      # awards dataset (network)
 node scripts/generate-lists.mjs       # curated lists dataset (network)
-node scripts/generate-artwork.mjs     # starter posters + library tiles
 ```
+
+Collection artwork under `assets/` is not generated — it is a set of files, maintained by
+hand. See [assets/thumbnails/README.md](assets/thumbnails/README.md).
 
 Claude agents in `.claude/agents/` cover the routine: `test` (haiku) after every change,
 `validate` (opus) before a release, `commit-message` and `release-notes` (sonnet) from the

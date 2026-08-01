@@ -80,6 +80,8 @@ data, used under the [Unicode License](https://www.unicode.org/license.txt).
 
 ## Collection artwork
 
-The starter artwork set under `assets/thumbnails/` has its own attributions — flag-icons
-(MIT) and the Noto font family (SIL OFL 1.1) — documented in
-[assets/thumbnails/README.md](assets/thumbnails/README.md).
+The artwork set under `assets/thumbnails/` has its own attributions — the Noto font family
+(SIL OFL 1.1) for the language posters and library tiles, and the supplied country posters,
+whose provenance is still to be recorded — documented in
+[assets/thumbnails/README.md](assets/thumbnails/README.md). None of it ships inside the
+plugin.
