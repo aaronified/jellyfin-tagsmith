@@ -237,6 +237,11 @@ public class CoreMetadataTagProvider : ITagProvider
     /// Resolves a language code to its English display name, so <c>bn</c> and <c>ben</c>
     /// both tag as <c>bengali</c> rather than as two different opaque codes.
     /// </summary>
+    /// <remarks>
+    /// The server's table answers with ISO 639-2's scholarly headings, so the name is put
+    /// through <see cref="LanguageCodes.Simplify"/> before it becomes a tag — otherwise
+    /// Spanish tags as <c>spanish_castilian</c> and Dutch as <c>dutch_flemish</c>.
+    /// </remarks>
     private string? DisplayLanguage(string? code)
     {
         if (string.IsNullOrWhiteSpace(code) || LanguageCodes.IsNoLanguage(code))
@@ -250,7 +255,9 @@ public class CoreMetadataTagProvider : ITagProvider
         }
 
         var normalised = LanguageCodes.Normalise(code);
-        return _localization.FindLanguageInfo(normalised)?.DisplayName ?? normalised;
+        var name = _localization.FindLanguageInfo(normalised)?.DisplayName;
+
+        return name is null ? normalised : LanguageCodes.Simplify(name);
     }
 
     // ---------------------------------------------------------------- audio streams

@@ -45,6 +45,21 @@ public class CountryAliasCatalogTests
     [InlineData("Hong Kong", "hong_kong")]
     [InlineData("Palestine", "palestine")]
     [InlineData("Great Britain", "united_kingdom")]
+    // Palestine, every way a metadata source spells it. The singular "Palestinian
+    // Territory" is the one TMDb sends and the one that used to slip through as its own
+    // tag, because CLDR only carries the plural.
+    [InlineData("Palestinian Territory", "palestine")]
+    [InlineData("Palestinian Territories", "palestine")]
+    [InlineData("Palestinian Territory, Occupied", "palestine")]
+    [InlineData("Occupied Palestinian Territory", "palestine")]
+    [InlineData("State of Palestine", "palestine")]
+    // The two Congos. The long names carried no mapping at all, so a film from Kinshasa
+    // tagged itself rather than joining the collection for its own country.
+    [InlineData("Democratic Republic of the Congo", "congo_kinshasa")]
+    [InlineData("DR Congo", "congo_kinshasa")]
+    [InlineData("DRC", "congo_kinshasa")]
+    [InlineData("Zaire", "congo_kinshasa")]
+    [InlineData("Republic of the Congo", "congo_brazzaville")]
     public void Resolves_to_canonical_slug(string input, string expected) =>
         Assert.Equal(expected, CountryAliasCatalog.Resolve(input));
 
@@ -70,6 +85,15 @@ public class CountryAliasCatalogTests
 
     [Fact]
     public void Catalog_is_populated() => Assert.True(CountryAliasCatalog.Count > 10_000);
+
+    [Fact]
+    public void The_two_Congos_stay_apart() =>
+        // Folding them would be worse than the gap that prompted this: they are different
+        // countries. Bare "Congo" is left to CLDR, which reads it as Brazzaville — genuinely
+        // ambiguous in English, and guessing the other way would be no better.
+        Assert.NotEqual(
+            CountryAliasCatalog.Resolve("Democratic Republic of the Congo"),
+            CountryAliasCatalog.Resolve("Republic of the Congo"));
 
     [Fact]
     public void Empty_input_yields_empty() => Assert.Equal(string.Empty, CountryAliasCatalog.Resolve(null));

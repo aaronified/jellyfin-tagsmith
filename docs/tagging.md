@@ -76,8 +76,10 @@ Every spelling of a country resolves to one canonical English name slug:
 | --- | --- |
 | `United States`, `United States of America`, `USA`, `US`, `Estados Unidos`, `États-Unis`, `美国` | `origin=united_states` |
 | `Germany`, `Deutschland`, `Allemagne`, `DEU` | `origin=germany` |
-| `Burma` | `origin=myanmar` |
+| `Burma`, `Zaire` | `origin=myanmar`, `origin=congo_kinshasa` |
 | `Czech Republic` | `origin=czechia` |
+| `Palestinian Territory`, `Palestinian Territories`, `State of Palestine` | `origin=palestine` |
+| `Democratic Republic of the Congo`, `DR Congo`, `DRC` | `origin=congo_kinshasa` |
 
 The dictionary is generated from Unicode CLDR by `scripts/generate-countries.mjs` and
 embedded as a gzipped resource. It covers every ISO 3166-1 territory across all 391 CLDR
@@ -92,7 +94,49 @@ Czechoslovakia and West Germany are not ISO 3166-1 territories, so they pass thr
 `origin=soviet_union` and so on. Folding a 1960s Soviet film into `origin=russia` would
 lose information you probably want. Add an alias rule if you disagree.
 
-Turn the whole thing off with *Canonicalise country names* to tag the raw metadata value.
+A territory that was merely *renamed* is a different case and does fold: Zaire is the same
+place as the Democratic Republic of the Congo, as Burma is the same place as Myanmar.
+
+**Bare `Congo` is left to CLDR**, which reads it as Congo-Brazzaville. It is genuinely
+ambiguous in English and guessing the other way would be no better; the unambiguous long
+names for both Congos resolve correctly.
+
+Turn the whole thing off with *Canonicalise country names* to tag the raw metadata
+value. That setting covers countries only; the language rules below are always applied.
+
+## Language names
+
+The server's localisation tables answer with ISO 639-2's scholarly headings rather than the
+names people use, so the name is reduced before it becomes a tag — otherwise Spanish tags
+as `lang=spanish_castilian` and the Spanish collection matches no artwork file.
+
+| Table says | Tag |
+| --- | --- |
+| `Spanish; Castilian` | `lang=spanish` |
+| `Dutch; Flemish` | `lang=dutch` |
+| `Romanian; Moldavian; Moldovan` | `lang=romanian` |
+| `Chinese (Traditional)`, `Chinese (Simplified)` | `lang=chinese` |
+| `Portuguese (Brazil)`, `Portuguese (Portugal)` | `lang=portuguese` |
+| `Greek, Modern (1453-)` | `lang=greek` (see below) |
+
+Three rules, each matching a convention of the source table: a semicolon separates synonyms
+so the first is kept; parentheses hold a qualifier — a script, a region, a date range — so
+they are dropped; and a single comma marks an inverted heading, so the halves swap rather
+than truncate. That last one matters: truncating would look right on `Greek, Modern` and
+would quietly merge `Ndebele, South` and `Ndebele, North`, which are different languages.
+
+Across every name the server can actually return — `LoadCultures` skips any ISO 639-2 row
+with no two-letter code, which is 302 of the 496 — the only names that end up shared are
+the script, region and dialect variants that should be: Chinese, French, Norwegian,
+Portuguese and Spanish. This deliberately folds dialects: one Spanish collection, not
+Spanish and Castilian.
+
+Greek is the single exception, handled by code rather than by the rules. `Greek, Modern`
+de-inverts correctly to "Modern Greek", but `el` is the only Greek the table can return,
+so the qualifier is noise and it is overridden to `lang=greek`.
+
+`audio_lang=` values come from the same resolution and are rewritten the same way.
+
 
 ## User aliases
 

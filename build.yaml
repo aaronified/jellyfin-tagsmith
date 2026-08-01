@@ -1,7 +1,7 @@
 ---
 name: "Tagsmith"
 guid: "4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84"
-version: "0.2.0"
+version: "0.2.1"
 targetAbi: "10.11.11.0"
 framework: "net9.0"
 owner: "aaronified"
@@ -14,4 +14,4 @@ description: >
 artifacts:
   - "Jellyfin.Plugin.Tagsmith.dll"
 changelog: >
-  Initial scaffold.
+  See the GitHub release notes for this version.
