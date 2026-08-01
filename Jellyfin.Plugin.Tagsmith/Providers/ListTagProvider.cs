@@ -31,9 +31,12 @@ public class ListTagProvider : ITagProvider
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Null-tolerant (a raw configuration POST can null the array), and a blank
-        // namespace is never claimed — see AwardTagProvider.Namespaces.
-        return configuration.EnabledLists is { Length: > 0 } && !string.IsNullOrWhiteSpace(configuration.ListNamespace)
+        // An empty dataset claims nothing — see AwardTagProvider.Namespaces for why that
+        // matters more than it looks. Null-tolerant too (a raw configuration POST can null
+        // the array), and a blank namespace is never claimed.
+        return CuratedData.ListTitleCount > 0
+               && configuration.EnabledLists is { Length: > 0 }
+               && !string.IsNullOrWhiteSpace(configuration.ListNamespace)
             ? [configuration.ListNamespace]
             : [];
     }

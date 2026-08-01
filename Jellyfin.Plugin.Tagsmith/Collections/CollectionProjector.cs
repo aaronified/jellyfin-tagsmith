@@ -103,7 +103,7 @@ public class CollectionProjector
         // later in the enum order unhealable by it and escalate them to a full media scan.
         if (!run.DryRun)
         {
-            foreach (var kind in Enum.GetValues<ProjectionKind>().Where(k => TagGrouping.IsEnabled(k, configuration)))
+            foreach (var kind in Enum.GetValues<ProjectionKind>().Where(k => WillBuild(k, configuration)))
             {
                 var path = MediaPathFor(kind);
                 try
@@ -294,7 +294,81 @@ public class CollectionProjector
             return;
         }
 
+        // Two projections reading one namespace build two identical libraries, and — because
+        // artwork is keyed on the namespace, not the kind — they then fight over one tile
+        // file and one set of posters, each adopting over the other every run. Easy to do by
+        // accident with award and nomination, whose values are the same shape. The kind
+        // declared first keeps the namespace; the later one stands off rather than both
+        // thrashing.
+        var claimedBy = Enum.GetValues<ProjectionKind>()
+            .Where(other => other < kind
+                            && TagGrouping.IsEnabled(other, configuration)
+                            && string.Equals(
+                                TagGrouping.NamespaceFor(other, configuration),
+                                tagNamespace,
+                                StringComparison.OrdinalIgnoreCase))
+            .Cast<ProjectionKind?>()
+            .FirstOrDefault();
+
+        if (claimedBy is { } owner)
+        {
+            _logger.LogError(
+                "Tagsmith: the {Kind} projection reads {Namespace}{Separator}, which the {Other} projection already claims; skipping it, "
+                + "because two libraries built from one namespace hold the same collections and overwrite each other's artwork. "
+                + "Give them different namespaces",
+                kind,
+                tagNamespace,
+                configuration.Separator,
+                owner);
+            return;
+        }
+
         var wanted = GroupItems(kind, items, tagNamespace, configuration.Separator);
+
+        // Zero values is never a reason to act. Two different things produce it and neither
+        // wants what the reconciliation below would do:
+        //
+        //   Nothing built yet — creating the library would put an empty shelf on every
+        //   client's home screen. The usual cause is a projection whose tagging is switched
+        //   off, and award, nomination and list tagging all default off, so ticking only the
+        //   projection is an easy mistake to make.
+        //
+        //   Already built — falling through would reach RemoveEmptyAsync, which would find
+        //   every record stale and delete every collection and its folder. But "no tags"
+        //   here is absence of evidence: an embedded dataset that failed to load, a ceremony
+        //   unticked, an external source down. Tagsmith already refuses to rewrite tags on
+        //   that basis (see the lookup-failed handling in CoreMetadataTagProvider) and must
+        //   not demolish a library on it either. Tearing a projection down is the
+        //   RemoveCollectionsWhenDisabled decision, or the delete task, never this.
+        //
+        // Collections for values that disappear individually are still pruned; only the
+        // all-gone case is treated as suspect.
+        if (wanted.Count == 0)
+        {
+            var built = configuration.ManagedLibraries.Any(l => l.Kind == kind);
+
+            if (!TagGrouping.SourceIsTagged(kind, configuration))
+            {
+                _logger.LogWarning(
+                    "Tagsmith: the {Kind} projection is on but nothing is writing {Namespace}{Separator} tags, so there is nothing to project; "
+                    + "switch that tagging on as well, and its ceremonies or lists if it has any. {Existing}",
+                    kind,
+                    tagNamespace,
+                    configuration.Separator,
+                    built ? "Its existing collections are left as they are." : "No library was created.");
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Tagsmith: no {Namespace}{Separator} tags in the library, so the {Kind} projection has nothing to reconcile. {Existing}",
+                    tagNamespace,
+                    configuration.Separator,
+                    kind,
+                    built ? "Its existing collections are left as they are." : "No library was created.");
+            }
+
+            return;
+        }
 
         var library = await EnsureLibraryAsync(kind, run, cancellationToken).ConfigureAwait(false);
         if (library is null)
@@ -503,7 +577,7 @@ public class CollectionProjector
         Run run,
         ref ManagedCollection? record)
     {
-        var displayName = TagGrouping.DisplayName(value);
+        var displayName = TagGrouping.DisplayName(kind, value);
 
         var folderName = BoxSetFolder.FolderNameFor(displayName);
         if (folderName is null)
@@ -910,6 +984,23 @@ public class CollectionProjector
             return null;
         }
 
+        // Seeded here as well as in the pre-run pass, because a library can be adopted whose
+        // directory that pass skipped — reclaiming one Tagsmith has no record of, for
+        // instance. An empty directory is what makes Jellyfin discard the library, so the
+        // guarantee has to hold on every path that hands back a usable handle, not just the
+        // one that creates it. A File.Exists in the steady state.
+        if (!run.DryRun)
+        {
+            try
+            {
+                SeedMediaDirectory(mediaPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Tagsmith: could not seed {Path}", mediaPath);
+            }
+        }
+
         var record = run.Configuration.ManagedLibraries.FirstOrDefault(l => l.Kind == kind);
 
         if (record is not null && !string.Equals(record.Name, folder.Name, StringComparison.Ordinal)
@@ -997,7 +1088,7 @@ public class CollectionProjector
         SweepBoxSetFolders(kind);
         RemoveMediaDirectory(kind);
 
-        SetEnabled(kind, run.Configuration, false);
+        TagGrouping.SetEnabled(kind, run.Configuration, false);
         Forget(kind, run);
         Persist(run);
     }
@@ -1472,6 +1563,23 @@ public class CollectionProjector
 
     // ---------------------------------------------------------------- plumbing
 
+    /// <summary>
+    /// Whether a projection is going to want a media directory this run.
+    /// </summary>
+    /// <remarks>
+    /// Seeding is a write, and it must not happen for a projection that
+    /// <see cref="ProjectKindAsync"/> is about to decline to build — ticking "project award
+    /// wins" without award tagging would otherwise leave an empty <c>tagsmith-award</c>
+    /// directory behind on every run, which no teardown path reaches because there is
+    /// nothing recorded to tear down. A projection Tagsmith already has a library for is
+    /// always seeded: emptying out is a state a live projection passes through, and its
+    /// directory going empty is what makes Jellyfin discard the library.
+    /// </remarks>
+    private static bool WillBuild(ProjectionKind kind, PluginConfiguration configuration) =>
+        TagGrouping.IsEnabled(kind, configuration)
+        && (TagGrouping.SourceIsTagged(kind, configuration)
+            || configuration.ManagedLibraries.Any(l => l.Kind == kind));
+
     private string MediaPathFor(ProjectionKind kind) =>
         Path.Combine(_paths.DataPath, "tagsmith-" + kind.ToString().ToLowerInvariant());
 
@@ -1516,22 +1624,6 @@ public class CollectionProjector
         configuration.ManagedCollections = configuration.ManagedCollections.Where(c => c.Kind != kind).ToArray();
         configuration.ManagedLibraries = configuration.ManagedLibraries.Where(l => l.Kind != kind).ToArray();
         run.Dirty = true;
-    }
-
-    private static void SetEnabled(ProjectionKind kind, PluginConfiguration configuration, bool enabled)
-    {
-        switch (kind)
-        {
-            case ProjectionKind.Origin:
-                configuration.ProjectOrigin = enabled;
-                break;
-            case ProjectionKind.Language:
-                configuration.ProjectLanguage = enabled;
-                break;
-            case ProjectionKind.Year:
-                configuration.ProjectYear = enabled;
-                break;
-        }
     }
 
     private sealed class Run

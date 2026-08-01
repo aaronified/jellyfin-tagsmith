@@ -47,12 +47,25 @@ collections built from the tags, which works anywhere.
 
 ```
 Origins  →  India · Japan · France        Decades  →  1950s · 1960s · 1970s
+Awards   →  Oscar – Best Picture          Curated Lists  →  IMDb Top 250
 ```
 
-Off by default. Tags stay the source of truth and collections are rebuilt from them, so a
-tag you add by hand lands in its collection on the next run. Years project by decade while
-`year=1954` tags stay precise. Requires Jellyfin to have write access to its config
-directory. Full detail in [docs/collections.md](docs/collections.md).
+Six namespaces can be projected, each into its own library: origins, languages, decades,
+award wins, nominations and curated lists. All off by default.
+
+Tags stay the source of truth and collections are rebuilt from them, so a tag you add by
+hand lands in its collection on the next run. Granularity is chosen per namespace rather
+than copied from the tag: years project by decade while `year=1954` tags stay precise, and
+awards keep the tag's full `ceremony:category` precision because "everything that ever won
+an Oscar" answers nothing. All four ceremonies on means about 80 collections per award
+namespace, so the first sync after enabling them takes a while.
+
+A projection is a separate switch from the tagging it projects. Ticking "project award
+wins" without also tagging awards would build an empty library, so Tagsmith declines and
+says so in the log.
+
+Requires Jellyfin to have write access to its config directory. Full detail in
+[docs/collections.md](docs/collections.md).
 
 ### Collection and library artwork
 
@@ -61,7 +74,13 @@ cards, decade cards, and a 16:9 home-screen tile per library — lives in
 [assets/thumbnails](assets/thumbnails). Copy the ones you want into
 `<config>/tagsmith/thumbnails/`, keeping the layout: collection posters go in
 `<namespace>/` named after the tag value (`origin/india.png`), the library tile at the
-root named after the namespace (`origin.png`). Case and separators do not matter.
+root named after the namespace (`origin.png`). Case and separators do not matter, and a
+colon becomes an underscore, so `award=oscar:best_picture` wants
+`award/oscar_best_picture.png`.
+
+The starter set covers origins, languages and decades. Nothing is bundled for awards,
+nominations or curated lists yet: those collections show what Jellyfin generates for them
+— a copy of the first film's poster — until you drop files in.
 
 A sync applies the folder wherever that cannot lose anything you did: collections and
 libraries it just created, anything with no poster at all, and its own artwork when the
@@ -159,7 +178,7 @@ dotnet publish Jellyfin.Plugin.Tagsmith -c Release -o artifacts
 ```
 
 Copy `artifacts/Jellyfin.Plugin.Tagsmith.dll` into
-`<jellyfin-config>/plugins/Tagsmith_0.1.1/` and restart the server.
+`<jellyfin-config>/plugins/Tagsmith_0.2.0/` and restart the server.
 
 The `Jellyfin.Controller` package version in the csproj must match the server version,
 or the plugin loads as `NotSupported`.

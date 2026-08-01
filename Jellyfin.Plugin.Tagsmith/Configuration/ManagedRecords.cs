@@ -1,12 +1,20 @@
 namespace Jellyfin.Plugin.Tagsmith.Configuration;
 
 /// <summary>
-/// The three things Tagsmith can project into a browsable library.
+/// The things Tagsmith can project into a browsable library.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Projections are keyed by kind rather than by the user's namespace string, so renaming
 /// a namespace from <c>origin</c> to <c>country</c> keeps pointing at the same library
 /// instead of orphaning it and building a second one.
+/// </para>
+/// <para>
+/// Append new members; never reorder or remove. The name is what a saved
+/// <see cref="ManagedCollection"/> or <see cref="ManagedLibrary"/> carries in the
+/// configuration file, and it is what ties a record to the library and the directory it
+/// already owns.
+/// </para>
 /// </remarks>
 public enum ProjectionKind
 {
@@ -17,7 +25,16 @@ public enum ProjectionKind
     Language,
 
     /// <summary>Release years, grouped by decade.</summary>
-    Year
+    Year,
+
+    /// <summary>Award wins, one collection per ceremony and category.</summary>
+    Award,
+
+    /// <summary>Award nominations, one collection per ceremony and category.</summary>
+    Nomination,
+
+    /// <summary>Curated lists, one collection per list.</summary>
+    List
 }
 
 /// <summary>

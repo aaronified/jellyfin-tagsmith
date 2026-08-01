@@ -38,6 +38,23 @@ public class AwardTagProvider : ITagProvider
 
         var namespaces = new List<string>();
 
+        // Claiming a prefix is claiming the right to delete every tag carrying it, and an
+        // empty dataset is no basis for that claim: CuratedData degrades a missing or corrupt
+        // resource to an empty set rather than throwing, which is right for the tag pass and
+        // wrong to then act on.
+        //
+        // This only stops a *new* claim. It does not un-claim a prefix already in
+        // KnownPrefixes, which TagSynchronizer unions in regardless of what any provider says
+        // — deliberately, since that list is what cleans up after a namespace is renamed or
+        // switched off. So on a server that has run successfully before, a dataset that
+        // later fails to load still prunes the tags. What stops that costing the collections
+        // too is CollectionProjector refusing to reconcile a projection that produced no
+        // values at all.
+        if (CuratedData.AwardTitleCount == 0)
+        {
+            return namespaces;
+        }
+
         // A blank namespace is never claimed: the emitting path refuses to write to one,
         // and claiming what is never written prunes tags for nothing in return.
         if (configuration.EnableAwards && !string.IsNullOrWhiteSpace(configuration.AwardNamespace))

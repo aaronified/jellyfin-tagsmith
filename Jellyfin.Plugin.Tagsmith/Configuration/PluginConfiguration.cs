@@ -150,6 +150,33 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool ProjectYear { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether award wins are projected, one collection per
+    /// ceremony and category — "Oscar – Best Picture".
+    /// </summary>
+    /// <remarks>
+    /// Only the ceremonies selected in <see cref="AwardCeremonies"/> produce tags, so they
+    /// are the only ones that produce collections. Around 80 categories exist across all
+    /// four ceremonies; the first run that builds them is a long one.
+    /// </remarks>
+    public bool ProjectAward { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether award nominations are projected, one
+    /// collection per ceremony and category.
+    /// </summary>
+    /// <remarks>
+    /// Nominations include the eventual winner, so these collections are supersets of the
+    /// matching <see cref="ProjectAward"/> ones rather than an alternative to them.
+    /// </remarks>
+    public bool ProjectNomination { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether curated-list membership is projected, one
+    /// collection per list in <see cref="EnabledLists"/>.
+    /// </summary>
+    public bool ProjectList { get; set; }
+
+    /// <summary>
     /// Gets or sets the library name for the origin projection.
     /// </summary>
     public string OriginLibraryName { get; set; } = "Origins";
@@ -163,6 +190,21 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the library name for the year projection.
     /// </summary>
     public string YearLibraryName { get; set; } = "Decades";
+
+    /// <summary>
+    /// Gets or sets the library name for the award projection.
+    /// </summary>
+    public string AwardLibraryName { get; set; } = "Awards";
+
+    /// <summary>
+    /// Gets or sets the library name for the nomination projection.
+    /// </summary>
+    public string NominationLibraryName { get; set; } = "Nominations";
+
+    /// <summary>
+    /// Gets or sets the library name for the curated-list projection.
+    /// </summary>
+    public string ListLibraryName { get; set; } = "Curated Lists";
 
     /// <summary>
     /// Gets or sets a value indicating whether disabling a projection also deletes the

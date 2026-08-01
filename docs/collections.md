@@ -4,7 +4,7 @@
 Confirmed on a live server as of 0.1.1: a plugin-created `boxsets` library renders like the
 built-in Collections library, provided its media directory is not empty when the library is
 registered — see [The directory must never be empty](#the-directory-must-never-be-empty),
-which is what made two of the three projections silently useless in 0.1.0.**
+which is what made two of the then-three projections silently useless in 0.1.0.**
 
 Jellyfin dropped tags from global search in 10.10, and several clients — Fladder among
 them — neither display nor filter on tags at all. Tags are therefore invisible on exactly
@@ -48,10 +48,14 @@ Jellyfin config volume:
 ```
 
 The directory is named after the `ProjectionKind` — `tagsmith-origin`,
-`tagsmith-language`, `tagsmith-year` — not after the namespace, so renaming a namespace
-keeps pointing at the same library.
+`tagsmith-language`, `tagsmith-year`, `tagsmith-award`, `tagsmith-nomination`,
+`tagsmith-list` — not after the namespace, so renaming a namespace keeps pointing at the
+same library.
 
-Roughly 100 files under 200 KB for a typical library.
+Roughly 100 files under 200 KB for origins, languages and decades. Awards and nominations
+add up to 80 collections each and curated lists up to 7, so a library with everything on
+is nearer 270 collections — still well under a megabyte, but the first run that builds
+them is a long one.
 
 **Jellyfin must have write access to its config directory.** On a read-only container
 filesystem collection creation fails outright
@@ -159,7 +163,8 @@ so a poster set while dry run is on is logged and not copied.
 
 ## What the user sees
 
-A library per namespace — "Origins", "Languages" — on the home screen of every client.
+A library per namespace — "Origins", "Languages", "Awards" — on the home screen of every
+client.
 Opening one shows a poster tile per value; opening a tile shows the films. Collections are
 named by value (`India`), not by full tag (`origin=india`), since the namespace is already
 the library name.
@@ -170,20 +175,76 @@ Visibility caveats, none of them plugin-controlled:
 - Users can hide libraries from their own home screen.
 - Clients cache the library list; a refresh or re-login may be needed.
 
+## What is projected
+
+Six namespaces, one library each:
+
+| Projection | Library | Collections | Roughly |
+| --- | --- | --- | --- |
+| `origin` | Origins | one per country | as many countries as the library has |
+| `lang` | Languages | one per language | ditto |
+| `year` | Decades | one per **decade** | 10 |
+| `award` | Awards | one per ceremony and category | 80 with all four ceremonies |
+| `nomination` | Nominations | one per ceremony and category | 80 |
+| `list` | Curated Lists | one per list | up to 7 |
+
+All six default to off.
+
 ## Granularity
 
 The projection is not obliged to mirror tag granularity. `year=1954` stays per-year as a
 tag, because that precision is what makes filtering useful, but the **year projection
 groups by decade** — `1950s`, ten tiles instead of a hundred.
 
-Other namespaces project one collection per value.
+Awards go the other way and keep the tag's full precision. `award=oscar:best_picture`
+projects to one collection per ceremony *and* category, because "every film that ever won
+an Oscar" is thousands of films and answers nothing, while "Best Picture winners" is a
+browse worth having. That is 80 collections per namespace across all four ceremonies, and
+only for ceremonies ticked in the award settings — the projection reads tags, and tags for
+an unticked ceremony are never written.
+
+Nominations include the eventual winner, so the Nominations library is a superset of the
+Awards one rather than a partition of it. Running both is a legitimate choice; it is also
+160 collections.
+
+Every other namespace projects one collection per value.
+
+## Names
+
+A collection is named for its value, not its tag: `India`, `1950s`, `Bengali`. Two
+namespaces need more than title-casing:
+
+- **Awards and nominations** hold the two-part `ceremony:category` value, rendered
+  `Oscar – Best Picture`. An en dash, not the colon the tag uses, because
+  `BoxSetFolder.SanitiseName` replaces a colon with a space and `Oscar  Best Picture` would
+  carry a double space into the folder name and the collection title. Joining words stay
+  lowercase: `Golden Globe – Best Motion Picture Musical or Comedy`.
+- **Curated lists** hold a slug whose real name is not a title-casing of it, so
+  `imdb_top_250` is `IMDb Top 250` and `tspdt_1000` is `TSPDT Top 1000`.
+
+Both tables live in `TagGrouping` and are pinned against the shipped datasets: a ceremony
+or list that appears in the data without a name of its own fails a test rather than
+shipping as `Bafta` or `Tspdt 1000`.
+
+Award *categories* have no such table — there are 80 of them and they title-case cleanly —
+so they are mechanical, with two corrections: joining words stay lowercase, and a short
+list of acronyms is spelled out, without which the Golden Globes' television categories
+would read "Best Tv Series Drama".
 
 ## Configuration
 
-Per namespace: **generate collections** on or off. Plus one global **remove collections
-when disabled**, default off.
+Per namespace: **generate collections** on or off, and the library's name. Plus one global
+**remove collections when disabled**, default off.
 
-`year` defaults to off even at decade granularity.
+A projection is a separate switch from the tagging it projects, and `award`, `nomination`
+and `list` tagging all default **off** — so ticking only the projection would build a
+library with nothing in it. Tagsmith refuses: a projection with nothing to show and no
+library yet does not create one, and says why in the log. An existing library is left
+alone, because emptying out is a state a live projection passes through.
+
+Two projections pointed at one namespace is also refused, for the later of the two. They
+would build two libraries holding identical collections, and — since artwork is keyed on
+the namespace, not the projection — each would overwrite the other's posters every run.
 
 ## Images
 
@@ -259,6 +320,15 @@ The filename stem is matched against the tag value after running both through
 `TagNormalizer.Slug`. That makes matching case-insensitive and forgiving of separators, so
 `india.png`, `India.PNG`, `United States.png` and `united-states.png` all resolve. Accepted
 extensions: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`.
+
+`Slug` collapses the colon in an award value, so the poster for `award=oscar:best_picture`
+is `thumbnails/award/oscar_best_picture.png`. Awards and nominations are separate
+namespaces over an identical value space, so a poster wanted in both needs to exist in
+both directories.
+
+**The starter set covers `origin`, `lang` and `year` only.** Nothing is bundled for
+`award`, `nomination` or `list` yet, so those collections fall back to what Jellyfin
+generates — a copy of the first member's poster — until files are dropped in.
 
 `<config>` is Jellyfin's data directory — `/config` in the official Docker image. On a
 native install, where the data directory and the `config/` directory inside it diverge,
@@ -354,6 +424,7 @@ On each run:
 | **Library deleted in Jellyfin's own settings** | Treat as intent. Flip the namespace off in config, **persist that immediately**, log it, **do not recreate** |
 | Collection exists but Tagsmith never recorded its id | Recover the id from the folder path and record it, so membership, adoption and the reapply button — all keyed on the id — start working again. The folder must sit directly inside the projection's own directory, because what is recovered can be handed to the delete path below |
 | Collection exists for a value with no items left | Delete it (Tagsmith-owned only) |
+| **A projection produces no values at all** | Do nothing, and log why. Nothing is created, and nothing already built is touched. "No tags" is absence of evidence — an embedded dataset that failed to load, a ceremony unticked, an external source down — and reconciling against it would delete every collection in the library. Individual values that disappear are still pruned; only the all-gone case is treated as suspect |
 | Box sets orphaned by a library deleted out of band | Delete their folders in the same pass. Their database items went with the library, so this is a guarded directory delete: the folder must end in ` [boxset]` and sit directly inside one of Tagsmith's own per-projection directories |
 
 The library-deleted row is the one that matters. The failure mode worth designing against

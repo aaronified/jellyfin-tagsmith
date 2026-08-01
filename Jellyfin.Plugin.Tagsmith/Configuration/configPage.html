@@ -238,6 +238,41 @@
                     </div>
 
                     <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ProjectAward" />
+                        <span>Project award wins into a library</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="AwardLibraryName" label="Award library name" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ProjectNomination" />
+                        <span>Project award nominations into a library</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="NominationLibraryName" label="Nomination library name" />
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ProjectList" />
+                        <span>Project curated lists into a library</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="ListLibraryName" label="Curated list library name" />
+                    </div>
+
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Awards and nominations get one collection per ceremony and category —
+                        <em>Oscar – Best Picture</em> — and only for the ceremonies ticked
+                        above, so all four ceremonies together produce around 80 collections
+                        in each of those libraries. Nominations
+                        include the winners, so those collections are supersets of the award
+                        ones. Curated lists get one collection per list ticked above. The
+                        first sync after enabling any of these builds every collection and
+                        takes a while.
+                    </div>
+
+                    <label class="checkboxContainer">
                         <input is="emby-checkbox" type="checkbox" id="RemoveCollectionsWhenDisabled" />
                         <span>Delete the collections and library when a projection is turned off</span>
                     </label>
@@ -327,7 +362,7 @@
                 </button>
                 <div class="fieldDescription">
                     Removes every collection and library Tagsmith created — the box-set entries
-                    and the Origins/Languages/Decades libraries. <strong>Your media is never
+                    and the libraries holding them. <strong>Your media is never
                     touched:</strong> collections only link to movies and shows, so deleting
                     one deletes the link, not the film. Tags are kept too. Projections left
                     enabled above are rebuilt from the tags on the next sync; to make the
@@ -341,13 +376,19 @@
     <script type="text/javascript">
         (function () {
             var pluginId = '4f2a9c31-6d5b-4c8e-9a70-1b3e5d7f2c84';
+            // Every id in the markup must appear in exactly one of these arrays. A field
+            // omitted here loads blank and saves blank — it fails silently, which for a
+            // library name means the projection is skipped and for a Project* box means it
+            // switches itself off on the next save.
             var textFields = ['Separator', 'OriginNamespace', 'LanguageNamespace', 'AudioLanguageNamespace',
                 'YearNamespace', 'AwardNamespace', 'NominationNamespace', 'ListNamespace',
-                'OriginLibraryName', 'LanguageLibraryName', 'YearLibraryName'];
+                'OriginLibraryName', 'LanguageLibraryName', 'YearLibraryName',
+                'AwardLibraryName', 'NominationLibraryName', 'ListLibraryName'];
             var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableAudioLanguage',
                 'EnableYear', 'EnableAwards', 'EnableNominations', 'UseExternalMetadata',
                 'RemoveObsoleteTags', 'DryRun',
-                'ProjectOrigin', 'ProjectLanguage', 'ProjectYear', 'RemoveCollectionsWhenDisabled'];
+                'ProjectOrigin', 'ProjectLanguage', 'ProjectYear',
+                'ProjectAward', 'ProjectNomination', 'ProjectList', 'RemoveCollectionsWhenDisabled'];
             var listFields = ['Aliases', 'KnownPrefixes'];
             // Arrays backed by groups of checkboxes rather than a textarea; the data-value
             // attribute is the value stored in the configuration array.

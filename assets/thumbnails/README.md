@@ -1,8 +1,11 @@
 # Collection artwork
 
-A starter set of collection posters and library tiles for the namespaces Tagsmith creates
-libraries for. They are **not** shipped inside the plugin — the installable stays small
-and carries no fonts or drawing libraries. Download the set you want, or make your own.
+A starter set of collection posters and library tiles for three of the six namespaces
+Tagsmith can project: `origin`, `lang` and `year`. Nothing is bundled for `award`,
+`nomination` or `list` yet — those collections show what Jellyfin generates for them, a
+copy of the first film's poster, until you supply files. They are **not** shipped inside
+the plugin — the installable stays small and carries no fonts or drawing libraries.
+Download the set you want, or make your own.
 
 | Path | Covers | Files |
 | --- | --- | --- |
