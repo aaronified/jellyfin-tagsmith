@@ -310,6 +310,28 @@
                             an empty replacement drops the tag. Lines starting with
                             <code>#</code> are comments.
                         </div>
+                        <div class="fieldDescription">
+                            <strong>One rule ships enabled:</strong>
+                            <code>lang:urdu =&gt; hindi</code> (and the same for
+                            <code>audio_lang</code>), so Hindi and Urdu share one collection.
+                            They are separate languages on paper — separate ISO codes,
+                            Devanagari against Perso-Arabic — but on screen the difference is
+                            largely inaudible: the dialogue either side of the border is
+                            spoken Hindustani, and the script decides how the subtitles are
+                            set rather than what the film sounds like. Keeping them apart
+                            splits the same actors, the same playback singers and often the
+                            same picture across two shelves.
+                            To turn it off, write <strong>both</strong>
+                            <code>lang:urdu =&gt; urdu</code> and
+                            <code>audio_lang:urdu =&gt; urdu</code> here — two rules ship, and
+                            one line overrides only one of them. They must be scoped like
+                            that; a bare <code>urdu =&gt; urdu</code> will not work, because a
+                            scoped rule always beats a global one. Expect the Urdu films to
+                            move to their own collection on the next sync. If you have
+                            <em>Remove obsolete tags</em> switched off, the fold adds
+                            <code>lang=hindi</code> without removing <code>lang=urdu</code>,
+                            leaving those films in both collections.
+                        </div>
                     </div>
                 </div>
 

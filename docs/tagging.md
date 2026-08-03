@@ -55,7 +55,7 @@ Non-Latin scripts survive intact — letters and digits in any script are kept.
 ## The pipeline
 
 ```
-external lookup  ->  provider output  ->  country canonicalisation  ->  user aliases  ->  prune and write
+external lookup  ->  provider output  ->  country canonicalisation  ->  aliases  ->  prune and write
 ```
 
 1. Each `ITagProvider` produces tags for the item — the core provider consults TMDb/TVDb
@@ -64,7 +64,8 @@ external lookup  ->  provider output  ->  country canonicalisation  ->  user ali
 2. Country values pass through `CountryAliasCatalog` (origin namespace only). ISO codes —
    which is what TMDb and TVDb send — resolve outright: a code is unambiguous by
    definition, whatever some locale renders as the same letters.
-3. `TagAliasMap` applies the user's rewrite rules, which can also drop tags.
+3. `TagAliasMap` applies the shipped rewrite rules and then the user's, which can also drop
+   tags. The user's rules are parsed last and so override a shipped rule for the same value.
 4. `TagSynchronizer` removes every existing tag matching a managed prefix, adds the newly
    computed set, and writes only if the result differs from what is already there.
 
@@ -138,7 +139,56 @@ so the qualifier is noise and it is overridden to `lang=greek`.
 `audio_lang=` values come from the same resolution and are rewritten the same way.
 
 
-## User aliases
+## Aliases
+
+### The one that ships enabled
+
+```
+lang:urdu => hindi
+audio_lang:urdu => hindi
+```
+
+Hindi and Urdu share a collection unless you say otherwise. They are separate languages on
+paper — ISO 639-1 `hi` and `ur`, ISO 639-2 `hin` and `urd`, their own CLDR rows, Devanagari
+against Perso-Arabic — but in an audio-visual medium that distinction is largely inaudible.
+The dialogue either side of the border is spoken Hindustani; the script decides how the
+subtitles are set rather than what the film sounds like. Shelving on it splits the same
+actors, the same playback singers and often the same picture into two places, and neither
+is where someone browsing would look.
+
+To turn it off, override each rule with one that maps the value to itself. **Both lines are
+needed** — two rules ship, and one line only overrides one of them:
+
+```
+lang:urdu => urdu
+audio_lang:urdu => urdu
+```
+
+They must be namespace-scoped. A bare `urdu => urdu` will *not* work: `Apply` consults
+scoped rules before global ones, so the shipped scoped rule wins over your global one
+whatever order they are written in.
+
+Expect the Urdu films to move into their own collection on the next sync, and
+[`assets/thumbnails/lang/urdu.png`](../assets/thumbnails/lang/urdu.png) — which ships for
+exactly this case — to start being used.
+
+> **If you have turned *Remove obsolete tags* off**, the fold adds `lang=hindi` without
+> removing the existing `lang=urdu`, and the film stays in both collections permanently —
+> the next run sees nothing left to do. This is how that setting behaves for any changed
+> value, not something specific to this rule, but this is the first default that triggers
+> it without you doing anything. Turn pruning on for one run to clean up.
+
+This is an alias rather than a fold in `LanguageCodes.Normalise` on purpose. Normalising
+would make the merge unconditional and invisible; as an alias it is a default rather than a
+law, and it shows up where every other rewrite rule does.
+
+The rules are written against the *configured* namespaces, so renaming `lang` to `language`
+carries the rule across. One limitation: `Parse` slugifies a rule's scope while `Apply`
+matches on the raw namespace, so a namespace that does not slugify to itself — `orig-lang`,
+`audio.lang`, anything with a separator or a space — silently misses. That affects any
+hand-written scoped rule equally; it is not particular to the shipped ones.
+
+### Your own
 
 Free-form rewrite rules, applied after canonicalisation, one per line:
 

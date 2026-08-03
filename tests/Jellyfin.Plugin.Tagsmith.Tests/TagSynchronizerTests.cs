@@ -58,6 +58,36 @@ public class TagSynchronizerTests
     };
 
     [Fact]
+    public async Task The_shipped_Urdu_alias_is_applied_without_any_user_configuration()
+    {
+        // Plugin.Instance is null here, so SyncAsync builds a default PluginConfiguration
+        // with an empty Aliases array — exactly the state a user who has never opened the
+        // settings page is in. The fold has to come from the shipped defaults or not at all.
+        var (synchronizer, _) = Build(["lang"], ["lang=urdu"]);
+        var item = ItemWith();
+
+        await synchronizer.SyncAsync(item, CancellationToken.None);
+
+        Assert.Contains("lang=hindi", item.Tags);
+        Assert.DoesNotContain("lang=urdu", item.Tags);
+    }
+
+    [Fact]
+    public async Task An_existing_Urdu_tag_is_rewritten_to_Hindi_on_the_next_sync()
+    {
+        // The migration path for a library tagged before the default shipped: the old value
+        // is inside a managed namespace, so pruning takes it and the fold puts Hindi back.
+        var (synchronizer, _) = Build(["lang"], ["lang=urdu"]);
+        var item = ItemWith("lang=urdu");
+
+        var changed = await synchronizer.SyncAsync(item, CancellationToken.None);
+
+        Assert.True(changed);
+        Assert.Contains("lang=hindi", item.Tags);
+        Assert.DoesNotContain("lang=urdu", item.Tags);
+    }
+
+    [Fact]
     public async Task Tags_outside_managed_namespaces_are_never_touched()
     {
         var (synchronizer, _) = Build(["origin"], ["origin=india"]);

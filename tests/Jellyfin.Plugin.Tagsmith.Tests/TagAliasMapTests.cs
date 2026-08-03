@@ -89,4 +89,112 @@ public class TagAliasMapTests
     [Fact]
     public void Honours_a_non_default_separator() =>
         Assert.Equal("origin:usa", TagAliasMap.Parse(["origin:united_states => usa"]).Apply("origin:united_states", ":"));
+
+    // ------------------------------------------------------------ the shipped defaults
+
+    [Fact]
+    public void Urdu_folds_onto_Hindi_out_of_the_box()
+    {
+        var map = TagAliasMap.Parse(TagAliasMap.DefaultRules("lang", "audio_lang"));
+
+        Assert.Equal("lang=hindi", map.Apply("lang=urdu", "="));
+        Assert.Equal("audio_lang=hindi", map.Apply("audio_lang=urdu", "="));
+    }
+
+    [Fact]
+    public void The_default_leaves_every_other_namespace_alone()
+    {
+        // Scoped, not global: nothing outside the two language namespaces is touched, and
+        // Hindi itself is not rewritten to anything.
+        var map = TagAliasMap.Parse(TagAliasMap.DefaultRules("lang", "audio_lang"));
+
+        Assert.Equal("origin=urdu", map.Apply("origin=urdu", "="));
+        Assert.Equal("lang=hindi", map.Apply("lang=hindi", "="));
+        Assert.Equal("lang=punjabi", map.Apply("lang=punjabi", "="));
+    }
+
+    [Fact]
+    public void A_user_rule_overrides_the_shipped_default()
+    {
+        // The documented way to turn the fold off: map the value to itself. Defaults are
+        // parsed first so the settings page always gets the last word.
+        var map = TagAliasMap.Parse(
+            TagAliasMap.DefaultRules("lang", "audio_lang").Concat(["lang:urdu => urdu"]));
+
+        Assert.Equal("lang=urdu", map.Apply("lang=urdu", "="));
+
+        // Only the rule they overrode: audio_lang still folds. Two rules ship, so turning
+        // the fold off completely takes two lines — which is what the docs now say.
+        Assert.Equal("audio_lang=hindi", map.Apply("audio_lang=urdu", "="));
+    }
+
+    [Fact]
+    public void Turning_the_fold_off_completely_takes_both_scoped_lines()
+    {
+        var map = TagAliasMap.Parse(TagAliasMap.DefaultRules("lang", "audio_lang")
+            .Concat(["lang:urdu => urdu", "audio_lang:urdu => urdu"]));
+
+        Assert.Equal("lang=urdu", map.Apply("lang=urdu", "="));
+        Assert.Equal("audio_lang=urdu", map.Apply("audio_lang=urdu", "="));
+    }
+
+    [Theory]
+    [InlineData("urdu => urdu")]
+    [InlineData("urdu => hindustani")]
+    [InlineData("urdu =>")]
+    public void A_global_user_rule_cannot_override_the_shipped_scoped_rule(string userRule)
+    {
+        // Apply checks the scoped dictionary before the global one, so parse order is
+        // irrelevant across the two. `urdu => urdu` is the line someone would reach for
+        // first and it does nothing — hence the docs insisting on the scoped form.
+        var map = TagAliasMap.Parse(TagAliasMap.DefaultRules("lang", "audio_lang").Concat([userRule]));
+
+        Assert.Equal("lang=hindi", map.Apply("lang=urdu", "="));
+    }
+
+    [Fact]
+    public void A_user_rule_can_redirect_the_default_somewhere_else()
+    {
+        var map = TagAliasMap.Parse(
+            TagAliasMap.DefaultRules("lang", "audio_lang").Concat(["lang:urdu => hindustani"]));
+
+        Assert.Equal("lang=hindustani", map.Apply("lang=urdu", "="));
+    }
+
+    [Fact]
+    public void The_default_follows_a_renamed_namespace()
+    {
+        // Written against the configured namespace, so renaming `lang` in the settings does
+        // not quietly disable the rule.
+        var map = TagAliasMap.Parse(TagAliasMap.DefaultRules("language", "tracks"));
+
+        Assert.Equal("language=hindi", map.Apply("language=urdu", "="));
+        Assert.Equal("tracks=hindi", map.Apply("tracks=urdu", "="));
+        Assert.Equal("lang=urdu", map.Apply("lang=urdu", "="));
+    }
+
+    [Theory]
+    [InlineData("orig-lang")]
+    [InlineData("orig lang")]
+    [InlineData("audio.lang")]
+    public void A_namespace_that_does_not_slug_to_itself_misses_its_scoped_rule(string tagNamespace)
+    {
+        // Pinning a known limitation rather than a desired behaviour: Parse slugs a rule's
+        // scope (`orig-lang` -> `orig_lang`) while Apply matches the raw namespace, so the
+        // two never meet. It bites any hand-written scoped rule identically, which is why
+        // the fix would be in Apply rather than here. Documented in docs/tagging.md; if
+        // this test starts failing, the limitation was fixed and the docs need updating.
+        var map = TagAliasMap.Parse(TagAliasMap.DefaultRules(tagNamespace, null));
+
+        Assert.Equal($"{tagNamespace}=urdu", map.Apply($"{tagNamespace}=urdu", "="));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", "")]
+    [InlineData("   ", null)]
+    public void A_blank_namespace_produces_no_default_rule(string? language, string? audio) =>
+        // A blank scope would parse as a global rule and rewrite `urdu` everywhere, which is
+        // more than this default is entitled to do.
+        Assert.True(TagAliasMap.Parse(TagAliasMap.DefaultRules(language, audio)).IsEmpty);
 }

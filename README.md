@@ -26,6 +26,14 @@ Country names are canonicalised, so `United States of America`, `USA`, `Estados 
 and `美国` all become `origin=united_states` — one tag, not four. Changing a value rewrites
 the existing tag rather than adding another. Full detail in [docs/tagging.md](docs/tagging.md).
 
+One rewrite rule ships enabled: **Urdu is tagged as Hindi**, so the two share a collection.
+On paper they are separate languages, but in an audio-visual medium the difference is
+largely inaudible — the dialogue either side of the border is spoken Hindustani, and the
+script decides how the subtitles are set rather than what the film sounds like. To keep them
+apart, add both `lang:urdu => urdu` and `audio_lang:urdu => urdu` to the Aliases box — a bare
+`urdu => urdu` will not do it, because a scoped rule always beats a global one. See
+[docs/tagging.md](docs/tagging.md#the-one-that-ships-enabled).
+
 ## Status
 
 Alpha. Origin and language are looked up in TMDb (built into the server) and TVDb (needs

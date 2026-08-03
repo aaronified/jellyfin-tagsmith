@@ -34,7 +34,15 @@ public class TagSynchronizer
     public async Task<bool> SyncAsync(BaseItem item, CancellationToken cancellationToken)
     {
         var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
-        var aliases = TagAliasMap.Parse(configuration.Aliases);
+
+        // Shipped rules first, the user's second: Parse keeps the last rule written for a
+        // value, so anything in the settings page overrides the default for that value.
+        // Seeding PluginConfiguration.Aliases instead would only reach fresh installs —
+        // an existing config already has the property saved, and its stored value wins
+        // over any initialiser — so the defaults live here, where every install sees them.
+        var aliases = TagAliasMap.Parse(
+            TagAliasMap.DefaultRules(configuration.LanguageNamespace, configuration.AudioLanguageNamespace)
+                .Concat(configuration.Aliases ?? []));
 
         var desired = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var activePrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

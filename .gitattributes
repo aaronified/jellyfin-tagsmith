@@ -1,2 +1,7 @@
 # The embedded datasets are binary; never let text normalisation near them.
 *.gz binary
+
+# TagAliasMap.cs uses a literal NUL as its dictionary-key delimiter, which makes git
+# call the file binary and show "Bin 5395 -> 8090 bytes" instead of a reviewable diff.
+# `diff` forces textual diffing regardless of byte values, without touching normalisation.
+*.cs diff
