@@ -8,9 +8,3 @@ artifacts/
 .vscode/
 *.nupkg
 node_modules/
-
-# Artwork working set. The posters already committed under assets/ stay tracked —
-# .gitignore only applies to untracked paths — so this keeps local artwork
-# (assets/placeholders/ and anything else dropped in) out of the repo.
-# Use `git add -f` to deliberately commit a new asset.
-assets/

@@ -1,44 +1,76 @@
 # Collection artwork
 
-A starter set of collection posters and library tiles for three of the six namespaces
-Tagsmith can project: `origin`, `lang` and `year`. Nothing is bundled for `award`,
-`nomination` or `list` yet — those collections show what Jellyfin generates for them, a
-copy of the first film's poster, until you supply files. They are **not** shipped inside
-the plugin — the installable stays small and carries no fonts or drawing libraries.
-Download the set you want, or make your own.
+Collection posters and library tiles for three of the six namespaces Tagsmith can project:
+`origin`, `lang` and `year`. Nothing is bundled for `award`, `nomination` or `list` yet —
+those collections show what Jellyfin generates for them, a copy of the first film's poster,
+until you supply files. They are **not** shipped inside the plugin — the installable stays
+small and carries no fonts or drawing libraries. Download the set you want, or make your
+own.
 
 | Path | Covers | Files |
 | --- | --- | --- |
 | `origin/` | Countries, including three historical states | 206 |
-| `lang/` | Languages, named in their own script | 31 |
+| `lang/` | Languages, named in their own script | 83 |
 | `year/` | Decades, 1920s to 2020s — a curated retro set | 11 |
 | `origin.png`, `lang.png`, `year.png` | The libraries' own home-screen tiles | 3 |
 
-[`../placeholders/`](../placeholders/) holds the **complete** set for these three namespaces:
-the curated posters as they stood when it was last refreshed, plus a solid colour block for
-every remaining collection. Install that tree instead of this one if you would rather every
-collection had *something*. Its `origin/` predates the 206-country set here, so take
-countries from this tree rather than that one. See its README.
+This is the whole of it. A collection outside these three sets — an uncovered country, a
+language nobody drew, every award and list category — shows Jellyfin's own default until
+you drop a file in. There is no fallback tree of blocks any more: a set of solid colour
+placeholders used to sit beside this one, and it was removed once `origin/` and `lang/`
+held real artwork.
 
-The language posters are 400x600 PNGs and the country and decade posters 1000x1500 — both
-Jellyfin's 2:3 poster aspect. The library tiles are 960x540 — the 16:9 shape of the home
-screen's "My Media" cards — and sit at the root of the tree, named after the *namespace*
-rather than a tag value.
+Every poster is a 1000x1500 PNG, Jellyfin's 2:3 poster aspect. The library tiles are
+960x540 — the 16:9 shape of the home screen's "My Media" cards — and sit at the root of
+the tree, named after the *namespace* rather than a tag value.
 
-`lang/` covers 27 languages — English, French, Spanish, Chinese, Japanese, and all 22
-languages of the Eighth Schedule to the Constitution of India:
+`lang/` covers 72 languages. Each poster carries a proverb in the language, its English
+gloss set quietly underneath, and the language's own name across a black band at the foot —
+the endonym in its own script, romanised at the left and named in English at the right:
 
-> Assamese, Bengali, Bodo, Dogri, Gujarati, Hindi, Kannada, Kashmiri, Konkani, Maithili,
-> Malayalam, Manipuri, Marathi, Nepali, Odia, Punjabi, Sanskrit, Santali, Sindhi, Tamil,
-> Telugu, Urdu
+> Afrikaans, Amharic, Arabic, Armenian, Azerbaijani, Basque, Bengali, Bhojpuri, Bulgarian,
+> Burmese, Cantonese, Catalan, Chinese, Croatian, Czech, Danish, Dutch, English, Estonian,
+> Filipino, Finnish, French, Georgian, German, Greek, Gujarati, Hausa, Hebrew, Hindi,
+> Hungarian, Icelandic, Indonesian, Irish, Italian, Japanese, Javanese, Kannada, Kazakh,
+> Khmer, Korean, Latvian, Lithuanian, Maithili, Malay, Malayalam, Marathi, Nepali, Nigerian
+> Pidgin, Norwegian, Odia, Pashto, Persian, Polish, Portuguese, Punjabi, Romanian, Russian,
+> Serbian, Sindhi, Sinhala, Spanish, Sundanese, Swahili, Swedish, Tamil, Telugu, Thai,
+> Turkish, Ukrainian, Uzbek, Vietnamese, Yoruba
 
-Between them those use eleven writing systems: Latin, Han, Devanagari, Bengali–Assamese,
-Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Ol Chiki and Perso-Arabic.
-Urdu, Kashmiri and Sindhi are set right to left.
+Arabic, Hebrew, Persian, Pashto, Sindhi and Urdu are set right to left.
 
-Four languages ship under two filenames each, because Jellyfin may name them either way:
-`odia`/`oriya`, `manipuri`/`meithei`, `bengali`/`bangla`, `punjabi`/`panjabi`. The pairs
-are byte-identical, so whichever one matches, the collection gets the same poster.
+That is 72 images under 83 filenames. The eleven extra stems are below, each byte-identical
+to the poster it duplicates, because the name on the poster is not always the name Jellyfin
+gives the collection — whichever one lands, it gets the same artwork:
+
+| Language | Filenames | Why |
+| --- | --- | --- |
+| Bengali | `bengali`, `bangla` | Jellyfin may name either |
+| Odia | `odia`, `oriya` | Jellyfin may name either |
+| Punjabi | `punjabi`, `panjabi` | Jellyfin may name either |
+| Pashto | `pushto`, `pashto` | the server's table heads that row *Pushto* |
+| Khmer | `central_khmer`, `khmer` | the server's table heads that row *Central Khmer* |
+| Filipino | `tagalog`, `filipino`, `fil` | the server names `tl` *Tagalog* |
+| Bhojpuri | `bhojpuri`, `bho` | see below |
+| Maithili | `maithili`, `mai` | see below |
+| Nigerian Pidgin | `nigerian_pidgin`, `pcm` | see below |
+| Urdu | `urdu` | a copy of `hindi` — see below |
+
+`bho`, `mai`, `pcm` and `fil` are bare ISO codes rather than names. A language with no
+two-letter code is skipped by the server's own `LoadCultures`, so `FindLanguageInfo` never
+resolves it and the tag falls through to the code itself — `lang=bho`, not
+`lang=bhojpuri`. Bhojpuri, Maithili and Nigerian Pidgin have no other stem that can match
+today; Filipino also answers to `tagalog`, since `tl` does resolve.
+
+`urdu.png` is a copy of `hindi.png`, which is drawn as a Hindi–Urdu poster: the proverb is
+set twice, in Devanagari and in Perso-Arabic, and the band names both languages. It is idle
+by default, because Tagsmith ships an alias rule folding Urdu into Hindi and no collection
+is named `urdu` unless you override it. Override the rule and the poster starts being used —
+see [docs/tagging.md](../../docs/tagging.md#the-one-that-ships-enabled).
+
+Eight languages that the previous set covered have no poster here: Assamese, Bodo, Dogri,
+Kashmiri, Konkani, Manipuri, Sanskrit and Santali. They were dropped with the set they
+belonged to rather than left behind at a different size and in a different style.
 
 ## Installing
 
@@ -79,19 +111,18 @@ Tagsmith writes it — check the collection name in Jellyfin if you are unsure.
 ## Maintaining
 
 Nothing here is generated. This set was previously rebuilt by
-`scripts/generate-artwork.mjs`, which has been removed now that `origin/` holds real
-artwork rather than machine-drawn flags — so **these files are the only copy**. Adding,
-replacing or removing a poster means editing this tree directly, and there is no step
-that will recreate one. Get the filename right: see [Naming](#naming) below, because the
-stem is what decides whether Tagsmith ever loads the file.
+`scripts/generate-artwork.mjs`, which has been removed now that `origin/` and `lang/` hold
+real artwork rather than machine-drawn flags and machine-set names — so **these files are
+the only copy**. Adding, replacing or removing a poster means editing this tree directly,
+and there is no step that will recreate one. Get the filename right: see
+[Naming](#naming) above, because the stem is what decides whether Tagsmith ever loads the
+file.
 
-The `lang/` posters were machine-rendered while that script existed, with their text
-shaped by HarfBuzz inside Skia. If you redraw one, mind that the complex scripts depend
-on the shaper: conjuncts, reordered vowel signs and cursive joining are all resolved
-there. Tooling that only maps codepoints to glyphs will produce plausible-looking but
-wrong Indic and Perso-Arabic names — detached matras, unformed conjuncts, letters in
-isolated instead of joined forms — so check the output by eye rather than trusting that
-it is non-blank.
+If you draw a replacement for one of the languages written in a complex script, check the
+text by eye rather than trusting that it is non-blank. Conjuncts, reordered vowel signs
+and cursive joining are resolved by the shaper, and tooling that only maps codepoints to
+glyphs produces plausible-looking but wrong Indic and Perso-Arabic text — detached matras,
+unformed conjuncts, letters in isolated instead of joined forms.
 
 ## Licence and attribution
 
@@ -100,15 +131,12 @@ it is non-blank.
   recorded yet, so this line still needs filling in.** The `flag-icons` (MIT) notice that
   used to sit here covered the seven generated flag posters this set replaced, and no longer
   describes anything in this folder.
-- **Type** — the Noto Sans family: Noto Sans, Noto Sans JP, Noto Sans SC, and Noto Sans
-  Arabic, Bengali, Devanagari, Gujarati, Gurmukhi, Kannada, Malayalam, Ol Chiki, Oriya,
-  Tamil and Telugu. All under the [SIL Open Font License 1.1](https://openfontlicense.org/),
-  and covering the `lang/` posters and the three library tiles. Only rendered output ships
-  here; no font files are redistributed in this folder.
-
-  Urdu and Kashmiri are set in Noto Sans Arabic (Naskh) rather than Noto Nastaliq Urdu.
-  Nastaliq is the better face for either language on its own, but its steeply cascading
-  baseline will not share a fixed hero centre with fourteen upright Noto Sans faces, and
-  Sindhi is conventionally set in Naskh regardless.
-- **The `lang/` and `year/` posters and the three tiles** — MIT, same as the rest of this
-  repository.
+- **The `lang/` posters** — likewise supplied artwork, not drawn in this repository, and
+  **their provenance is not recorded yet either**. Both the proverbs and the faces they are
+  set in came with the files. The Noto Sans notice that used to sit here covered the
+  machine-rendered set this one replaced, where the repository chose the fonts, and no
+  longer describes anything in this folder.
+- **Type** — Noto Sans, under the
+  [SIL Open Font License 1.1](https://openfontlicense.org/), covering the three library
+  tiles. Only rendered output ships here; no font files are redistributed in this folder.
+- **The `year/` posters and the three tiles** — MIT, same as the rest of this repository.
