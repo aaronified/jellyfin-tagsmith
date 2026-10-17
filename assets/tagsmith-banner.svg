@@ -1,13 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1308 688" width="1308" height="688">
-  <!-- Landscape version of tagsmith.svg for the Plugins page tile and the catalogue card
-       (about 327:172). The dashboard draws the plugin name below the image, not over it, so
-       the mark is centred. It is centred on the tag's own bounding box (x 72-464, y 56-446 in
-       the 512 viewBox), not on the viewBox, which would leave it off to one side. -->
+  <!-- Landscape icon for the Plugins page tile and the catalogue card (about 327:172). It is
+       the same plain tag glyph as the avatar-menu entry (Material "local_offer", 24-unit
+       viewBox, spanning 2-22 on both axes, so (12,12) is its centre) in the menu's light
+       grey, centred on the canvas. The dashboard draws the name below the image. -->
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4FC3F7"/>
-      <stop offset="1" stop-color="#1565C0"/>
-    </linearGradient>
     <radialGradient id="glow" cx="50%" cy="50%" r="55%">
       <stop offset="0" stop-color="#1B3A5C" stop-opacity="0.9"/>
       <stop offset="1" stop-color="#0B1622" stop-opacity="0"/>
@@ -15,11 +11,7 @@
   </defs>
   <rect width="1308" height="688" fill="#0B1622"/>
   <rect width="1308" height="688" fill="url(#glow)"/>
-  <!-- the tag from tagsmith.svg (viewBox 512), scaled to 0.9 and centred -->
-  <g transform="translate(657.5 344) scale(0.9) translate(-268 -251)">
-    <path d="M300 56h140a24 24 0 0 1 24 24v140a56 56 0 0 1-16.4 39.6L246 439.2a24 24 0 0 1-33.9 0L72.8 299.9a24 24 0 0 1 0-33.9L260.4 72.4A56 56 0 0 1 300 56z"
-          fill="url(#g)"/>
-    <circle cx="396" cy="124" r="34" fill="#0B1622"/>
-    <circle cx="396" cy="124" r="18" fill="#4FC3F7"/>
+  <g transform="translate(654 344) scale(18) translate(-12 -12)" fill="#E4E8EE">
+    <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
   </g>
 </svg>
