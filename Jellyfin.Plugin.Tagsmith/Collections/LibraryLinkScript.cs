@@ -69,17 +69,23 @@ public static class LibraryLinkScript
     /// Inserts the script into an <c>index.html</c> document. Idempotent: a document that
     /// already carries the script is returned unchanged.
     /// </summary>
-    public static string Inject(string html)
+    public static string Inject(string html) => InjectBlock(html, Marker, Script);
+
+    /// <summary>
+    /// Splices a <c>&lt;script&gt;</c> block, led by an HTML comment that marks it as present,
+    /// in before the closing body tag. Shared by every script Tagsmith adds to the page.
+    /// </summary>
+    internal static string InjectBlock(string html, string marker, string script)
     {
         ArgumentNullException.ThrowIfNull(html);
 
-        if (html.Contains(Marker, StringComparison.Ordinal))
+        if (html.Contains(marker, StringComparison.Ordinal))
         {
             return html;
         }
 
         var block = new StringBuilder()
-            .Append(Marker).Append("<script>").Append(Script).Append("</script>")
+            .Append(marker).Append("<script>").Append(script).Append("</script>")
             .ToString();
 
         var at = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);

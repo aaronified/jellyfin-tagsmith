@@ -60,4 +60,27 @@ public class LibraryLinkScriptTests
     [Fact]
     public void The_script_guards_against_running_twice() =>
         Assert.Contains("__tagsmithLibraryLinks", LibraryLinkScript.Script);
+
+    [Fact]
+    public void The_user_menu_script_is_spliced_in_once_alongside_the_link_script()
+    {
+        var both = UserMenuScript.Inject(LibraryLinkScript.Inject(Page));
+
+        Assert.Contains(LibraryLinkScript.Script, both);
+        Assert.Contains(UserMenuScript.Script, both);
+        Assert.Equal(both, UserMenuScript.Inject(both));
+    }
+
+    [Fact]
+    public void The_user_menu_script_clones_the_settings_item_and_opens_this_plugins_page()
+    {
+        Assert.Contains("#app-user-menu", UserMenuScript.Script);
+        Assert.Contains("cloneNode", UserMenuScript.Script);
+        Assert.Contains("#/configurationpage?name=Tagsmith", UserMenuScript.Script);
+        Assert.Contains("__tagsmithUserMenu", UserMenuScript.Script);
+    }
+
+    [Fact]
+    public void The_user_menu_entry_is_for_administrators_only() =>
+        Assert.Contains("IsAdministrator", UserMenuScript.Script);
 }

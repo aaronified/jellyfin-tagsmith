@@ -234,6 +234,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool FixLibraryLinks { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether administrators get a Tagsmith entry in the
+    /// Jellyfin 12 avatar menu, which opens this settings page. Jellyfin 12 has no sidebar to
+    /// reach it from. Same plugin requirements and restart rule as <see cref="FixLibraryLinks"/>.
+    /// </summary>
+    public bool ShowUserMenuLink { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets every tag prefix Tagsmith has ever written, e.g. <c>origin=</c>.
     /// </summary>
     /// <remarks>

@@ -25,13 +25,18 @@ jobs:
           dotnet-version: "9.0.x"
 
       # Jellyfin compares versions with System.Version, where 1.0.0 != 1.0.0.0.
-      # Keep the manifest on 3-part versions; .NET still needs 4 parts internally.
+      # The release tag and zip stay on 3-part versions; .NET needs 4 parts internally, and
+      # the manifest entry uses the same 4 parts. The dashboard asks the server for a
+      # plugin's icon by the version the assembly reports (0.2.3.0), and the server matches
+      # that against the manifest's version (it was 0.2.3), so a 3-part manifest entry made
+      # every request 404 and the Plugins page showed a blank tile.
       - name: Resolve version
         id: v
         run: |
           v="${{ inputs.version }}"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "assembly_version=$v.0" >> "$GITHUB_OUTPUT"
+          echo "manifest_version=$v.0" >> "$GITHUB_OUTPUT"
           echo "zip=tagsmith_$v.zip" >> "$GITHUB_OUTPUT"
 
       - name: Build
@@ -70,7 +75,7 @@ jobs:
           CHANGELOG: ${{ inputs.changelog }}
         run: |
           ./scripts/update-manifest.sh \
-            "${{ steps.v.outputs.version }}" \
+            "${{ steps.v.outputs.manifest_version }}" \
             "artifacts/${{ steps.v.outputs.zip }}" \
             "${{ github.server_url }}/${{ github.repository }}/releases/download/v${{ steps.v.outputs.version }}/${{ steps.v.outputs.zip }}" \
             "$CHANGELOG"

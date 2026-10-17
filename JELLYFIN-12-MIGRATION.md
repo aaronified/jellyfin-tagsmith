@@ -196,8 +196,13 @@ back to **File Transformation** if that is what is installed. The script rewrite
   API, which fires neither `hashchange` nor `popstate`, so a script that only listens for
   those redirects a page load and nothing else. The script wraps `pushState` and
   `replaceState` too. This was found the hard way on a live server.
-- Off switch: **Library links** on the settings page (`FixLibraryLinks`, default on). It
+- Off switch: **Web client** on the settings page (`FixLibraryLinks`, default on). It
   takes effect at the next server restart on the JavaScript Injector route.
+- A second script, `UserMenuScript`, adds a Tagsmith entry to the avatar menu (switch:
+  `ShowUserMenuLink`). Jellyfin's plugin model has no user-menu flag, so it does what
+  Jellyscribe does: clone the menu's own Settings item and insert it after it. It opens
+  `#/configurationpage?name=Tagsmith` and is added for administrators only. Tested against a
+  stub of the menu, not against the real 12 client.
 - It adds a script to the web client for **every visitor, signed in or not**
   (`requiresAuthentication = false`).
 - Registration happens once per start and is never removed on shutdown, so Injector's saved

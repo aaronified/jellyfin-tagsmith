@@ -43,18 +43,22 @@ cover the Academy Awards in full plus BAFTA, Golden Globes and Emmys from Wikida
 data licensing is documented in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md); see
 [docs/plan.md](docs/plan.md) for what shipped when.
 
-### Jellyfin 12 library links
+### Jellyfin 12 web client
+
+Two small scripts are added to the web client.
 
 On Jellyfin 12 a collections library's home-screen tile opens a view that lists every
-collection on the server instead of just that library's. Tagsmith works around it by
-adding a small script to the web client that sends those tiles to the scoped list view,
-as 10.11 did. It covers **every** collections library, not only Tagsmith's own.
+collection on the server instead of just that library's. The first script sends those tiles
+to the scoped list view, as 10.11 did. It covers **every** collections library, not only
+Tagsmith's own. The second adds a **Tagsmith** entry to the avatar menu, beside Settings,
+for administrators: Jellyfin 12 has no sidebar to reach this page from.
 
 It needs the [JavaScript Injector](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector)
 plugin (File Transformation also works), and does nothing on 10.11 or without one of them.
-The script is served to every visitor, signed in or not. **Library links** on the settings
-page turns it off, from the next restart. Uninstalling Tagsmith leaves its entry behind;
-delete "Tagsmith library links" under Dashboard → Plugins → JS Injector. Background and
+The scripts are served to every visitor, signed in or not. Each has its own switch under
+**Web client** on the settings page, effective from the next restart. Uninstalling Tagsmith
+leaves them behind; delete "Tagsmith library links" and "Tagsmith user menu" under
+Dashboard → Plugins → JS Injector. Background and
 what is still untested: [JELLYFIN-12-MIGRATION.md](JELLYFIN-12-MIGRATION.md).
 
 ## Finding tagged items

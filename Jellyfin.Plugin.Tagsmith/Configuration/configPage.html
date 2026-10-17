@@ -168,7 +168,7 @@
                 </div>
 
                 <div class="verticalSection">
-                    <h2 class="sectionTitle">Library links (Jellyfin 12)</h2>
+                    <h2 class="sectionTitle">Web client (Jellyfin 12)</h2>
 
                     <label class="checkboxContainer">
                         <input is="emby-checkbox" type="checkbox" id="FixLibraryLinks" />
@@ -180,6 +180,15 @@
                         every visitor, that restores the older link. It needs the
                         <strong>JavaScript Injector</strong> (or File Transformation) plugin and does
                         nothing on 10.11. Changing this takes effect after a server restart.
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="ShowUserMenuLink" />
+                        <span>Add Tagsmith to the avatar menu (administrators)</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Jellyfin 12 has no sidebar, so this is the way back to this page. Same
+                        plugin requirement, and the same restart rule, as the option above.
                     </div>
                 </div>
 
@@ -424,7 +433,7 @@
                 'AwardLibraryName', 'NominationLibraryName', 'ListLibraryName'];
             var boolFields = ['EnableOrigin', 'CanonicaliseCountries', 'EnableLanguage', 'EnableAudioLanguage',
                 'EnableYear', 'EnableAwards', 'EnableNominations', 'UseExternalMetadata',
-                'RemoveObsoleteTags', 'DryRun', 'FixLibraryLinks',
+                'RemoveObsoleteTags', 'DryRun', 'FixLibraryLinks', 'ShowUserMenuLink',
                 'ProjectOrigin', 'ProjectLanguage', 'ProjectYear',
                 'ProjectAward', 'ProjectNomination', 'ProjectList', 'RemoveCollectionsWhenDisabled'];
             var listFields = ['Aliases', 'KnownPrefixes'];

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
+using Jellyfin.Plugin.Tagsmith.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -36,9 +37,6 @@ public sealed class LibraryLinkRegistrar : IHostedService
     private const int Attempts = 6;
     private static readonly TimeSpan _retryDelay = TimeSpan.FromSeconds(20);
 
-    /// <summary>The script id, stable so a re-registration replaces rather than stacks.</summary>
-    private const string ScriptId = "tagsmith-library-links";
-
     /// <summary>The File Transformation registration id, stable for the same reason.</summary>
     private static readonly Guid _registrationId = Guid.Parse("8c1d4b7e-3a52-4f69-b0e8-6d2f9a147c35");
 
@@ -52,6 +50,12 @@ public sealed class LibraryLinkRegistrar : IHostedService
     {
         _logger = logger;
     }
+
+    /// <summary>
+    /// A script Tagsmith adds to the web client. The id is stable, so a re-registration
+    /// replaces rather than stacks.
+    /// </summary>
+    private sealed record WebScript(string Id, string Name, string Source, bool Enabled, Func<string, string> Inject);
 
     /// <summary>The argument File Transformation builds from the page contents.</summary>
     public sealed class Payload
@@ -68,13 +72,24 @@ public sealed class LibraryLinkRegistrar : IHostedService
     {
         var html = payload?.Contents ?? string.Empty;
         var configuration = Plugin.Instance?.Configuration;
-        if (configuration is null || !configuration.FixLibraryLinks)
+        if (configuration is null)
         {
             return html;
         }
 
-        return LibraryLinkScript.Inject(html);
+        return WebScripts(configuration).Where(s => s.Enabled).Aggregate(html, (page, script) => script.Inject(page));
     }
+
+    /// <summary>
+    /// Everything Tagsmith adds to the web client, with each script's own on/off setting.
+    /// </summary>
+    private static WebScript[] WebScripts(PluginConfiguration? configuration) =>
+    [
+        new("tagsmith-library-links", "Tagsmith library links", LibraryLinkScript.Script,
+            configuration?.FixLibraryLinks ?? true, LibraryLinkScript.Inject),
+        new("tagsmith-user-menu", "Tagsmith user menu", UserMenuScript.Script,
+            configuration?.ShowUserMenuLink ?? true, UserMenuScript.Inject)
+    ];
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
@@ -113,7 +128,7 @@ public sealed class LibraryLinkRegistrar : IHostedService
             }
 
             _logger.LogInformation(
-                "Tagsmith: neither JavaScript Injector nor File Transformation is installed; library tiles keep Jellyfin's own links");
+                "Tagsmith: neither JavaScript Injector nor File Transformation is installed; the Jellyfin 12 library links and avatar-menu entry are not added");
         }
         catch (OperationCanceledException)
         {
@@ -130,38 +145,42 @@ public sealed class LibraryLinkRegistrar : IHostedService
         {
             if (Find(InjectorType, "JavaScriptInjector") is { } injector)
             {
-                if (configuration is { FixLibraryLinks: false })
-                {
-                    // Switched off: make sure an earlier registration does not linger.
-                    Invoke(injector, "UnregisterScript", ScriptId);
-                    return true;
-                }
-
                 var plugin = Plugin.Instance;
-                var payload = JsonSerializer.Serialize(new
+                foreach (var script in WebScripts(configuration))
                 {
-                    id = ScriptId,
-                    name = "Tagsmith library links",
-                    script = LibraryLinkScript.Script,
-                    enabled = true,
-                    requiresAuthentication = false,
-                    pluginId = plugin?.Id.ToString(),
-                    pluginName = plugin?.Name ?? "Tagsmith",
-                    pluginVersion = plugin?.Version.ToString()
-                });
+                    if (!script.Enabled)
+                    {
+                        // Switched off: make sure an earlier registration does not linger.
+                        Invoke(injector, "UnregisterScript", script.Id);
+                        continue;
+                    }
 
-                if (Invoke(injector, "RegisterScript", ToJObject(injector.Assembly, payload)) is false)
-                {
-                    throw new InvalidOperationException("JavaScript Injector declined the script");
+                    var payload = JsonSerializer.Serialize(new
+                    {
+                        id = script.Id,
+                        name = script.Name,
+                        script = script.Source,
+                        enabled = true,
+                        requiresAuthentication = false,
+                        pluginId = plugin?.Id.ToString(),
+                        pluginName = plugin?.Name ?? "Tagsmith",
+                        pluginVersion = plugin?.Version.ToString()
+                    });
+
+                    if (Invoke(injector, "RegisterScript", ToJObject(injector.Assembly, payload)) is false)
+                    {
+                        throw new InvalidOperationException($"JavaScript Injector declined the script '{script.Id}'");
+                    }
+
+                    _logger.LogInformation("Tagsmith: registered '{Script}' (via JavaScript Injector)", script.Name);
                 }
 
-                _logger.LogInformation("Tagsmith: library links will open the scoped list view (via JavaScript Injector)");
                 return true;
             }
 
             if (Find(TransformationType, ".FileTransformation") is { } transformation)
             {
-                if (configuration is { FixLibraryLinks: false })
+                if (!WebScripts(configuration).Any(s => s.Enabled))
                 {
                     return true;
                 }
@@ -177,7 +196,7 @@ public sealed class LibraryLinkRegistrar : IHostedService
                 });
 
                 Invoke(transformation, "RegisterTransformation", ToJObject(transformation.Assembly, payload));
-                _logger.LogInformation("Tagsmith: library links will open the scoped list view (via File Transformation)");
+                _logger.LogInformation("Tagsmith: web client scripts registered (via File Transformation)");
                 return true;
             }
         }
@@ -185,7 +204,7 @@ public sealed class LibraryLinkRegistrar : IHostedService
         {
             // The surface moved or the call threw: leave the stock links alone, once, and do
             // not retry a failure that retrying will not cure.
-            _logger.LogWarning(ex, "Tagsmith: could not register the library link script");
+            _logger.LogWarning(ex, "Tagsmith: could not register the web client scripts");
             return true;
         }
 
