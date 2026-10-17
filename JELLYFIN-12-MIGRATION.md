@@ -1,6 +1,8 @@
 # Jellyfin 12 migration
 
-**Status: investigation only. No code changes until Jellyfin 12 final ships.**
+**Status: investigation, plus one shipped workaround (0.2.3): a client-side link rewrite,
+described under [Implemented](#implemented-link-rewrite-via-javascript-injector-023). The
+server-side causes below are unchanged, and nothing else here has been acted on.**
 
 Tagsmith targets 10.11.11 (`build.yaml` `targetAbi: 10.11.11.0`, `Jellyfin.Controller`
 10.11.11) and that is not moving yet. This document records what 12 changes, what it does
@@ -176,6 +178,46 @@ reasons about, and the reason members are written by path.
 An upgraded server looks fine because the rows already exist from 10.11. The exposure is
 **newly created collections, membership changes, and any rebuild from scratch**. Test D.
 
+## Implemented: link rewrite via JavaScript Injector (0.2.3)
+
+This is not one of the numbered options below: it leaves the server, the library type and
+the data alone and fixes only where the tile points.
+
+`LibraryLinkRegistrar` registers `LibraryLinkScript` through the optional **JavaScript
+Injector** plugin (n00bcodr, which publishes a Jellyfin 12 build) by reflection, falling
+back to **File Transformation** if that is what is installed. The script rewrites `#/boxsets?topParentId=<id>` to `#/list?parentId=<id>` (the 10.11.11 route) using
+`location.replace`, so Back still works.
+
+- Applies to **every** `boxsets` library, not only Tagsmith's. The stock Collections tab has
+  the same pile, now with Tagsmith's projected collections mixed in, and must open only its
+  own (e.g. a Lord of the Rings box set).
+- Carries no id list, so a cached `index.html` never goes stale when a library is added.
+- **In-app clicks need the history hooks.** jellyfin-web 12 navigates through the history
+  API, which fires neither `hashchange` nor `popstate`, so a script that only listens for
+  those redirects a page load and nothing else. The script wraps `pushState` and
+  `replaceState` too. This was found the hard way on a live server.
+- Off switch: **Library links** on the settings page (`FixLibraryLinks`, default on). It
+  takes effect at the next server restart on the JavaScript Injector route.
+- It adds a script to the web client for **every visitor, signed in or not**
+  (`requiresAuthentication = false`).
+- Registration happens once per start and is never removed on shutdown, so Injector's saved
+  configuration is not rewritten twice per restart. Uninstalling Tagsmith leaves the
+  "Tagsmith library links" entry behind; delete it in Dashboard → Plugins → JS Injector.
+- Without either plugin, or on 10.11, nothing changes; the registrar logs one line after
+  about two minutes of retrying and gives up. A renamed entry point on either plugin is
+  logged as a warning, not as success.
+- **What has and has not been run.** Run on Jellyfin 12.2.0 with JavaScript Injector
+  4.0.0.0: the script itself, from a hand-written Injector entry, in a real browser — page
+  loads and in-app navigation both redirect, and the tabs were confirmed working by hand.
+  **Not yet run:** the reflection registration path (the type names, signatures and payload
+  field names were transcribed from the Injector's source), and File Transformation on 12
+  at all. Check the log for "library links will open the scoped list view".
+- **Unverified.** Whether 12's client sends anything other than a collections-library tile
+  through `#/boxsets?topParentId=` with a non-`boxsets` id; if it does, that link would now
+  open a plain folder list instead.
+- Does not touch the server-side re-rooting, so API clients and the pile itself are
+  unchanged; option 1 (upstream bug) is still worth filing.
+
 ## Options
 
 Ranked by cost. Verified reasoning, unverified outcomes.
@@ -273,7 +315,8 @@ collection and confirm `GET /Items?ParentId=<newBoxSetId>` returns its members. 
 
 ## Decision
 
-**Wait for 12 final. Change no code.**
+**Wait for 12 final before touching the server side.** The client-side rewrite above is the
+one change made in the meantime.
 
 The breakage is presentational, the data is safe, resolution and artwork are safe under any
 collection type, and 10.11 users are unaffected. The attractive one-line fix is dead, and
@@ -281,7 +324,7 @@ the surviving variant is a marker-file rewrite outside Tagsmith's ownership fenc
 schema bump and an in-place migration attached — not something to build against an RC that
 has already moved routing once.
 
-The first move when 12 final lands is test A, then a bug report upstream. Not a patch.
+The first move when 12 final lands is test A, then a bug report upstream. Not a server patch.
 
 Two things to carry forward independently of the view problem: the `DataPath` merge
 regression in §5, and hardening `Rebuild` (recreate under `folder.Name`, check the removal

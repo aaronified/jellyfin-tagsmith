@@ -225,6 +225,15 @@ public class PluginConfiguration : BasePluginConfiguration
     public ManagedLibrary[] ManagedLibraries { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets a value indicating whether <c>boxsets</c> library tiles are sent to the
+    /// scoped list view instead of Jellyfin 12's <c>#/boxsets</c> route, which shows every
+    /// collection on the server. Needs the JavaScript Injector or File Transformation plugin;
+    /// inert without one and on 10.11, where the stock link is already the scoped one. Turning
+    /// it off takes effect at the next server restart.
+    /// </summary>
+    public bool FixLibraryLinks { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets every tag prefix Tagsmith has ever written, e.g. <c>origin=</c>.
     /// </summary>
     /// <remarks>

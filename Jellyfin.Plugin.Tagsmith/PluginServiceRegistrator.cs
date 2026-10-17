@@ -37,5 +37,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // listener shares the singleton artwork synchroniser, which is what makes its loop
         // guard work.
         serviceCollection.AddHostedService<PosterAdoptionListener>();
+
+        // Registers the library-link script with the JavaScript Injector plugin (or File
+        // Transformation) when one is installed. See LibraryLinkScript for why Jellyfin 12 needs it.
+        serviceCollection.AddHostedService<LibraryLinkRegistrar>();
     }
 }

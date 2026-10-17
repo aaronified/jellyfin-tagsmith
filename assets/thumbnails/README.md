@@ -10,7 +10,7 @@ own.
 | Path | Covers | Files |
 | --- | --- | --- |
 | `origin/` | Countries, including three historical states | 206 |
-| `lang/` | Languages, named in their own script | 83 |
+| `lang/` | Languages, named in their own script | 88 |
 | `year/` | Decades, 1920s to 2020s — a curated retro set | 11 |
 | `origin.png`, `lang.png`, `year.png` | The libraries' own home-screen tiles | 3 |
 
@@ -24,22 +24,26 @@ Every poster is a 1000x1500 PNG, Jellyfin's 2:3 poster aspect. The library tiles
 960x540 — the 16:9 shape of the home screen's "My Media" cards — and sit at the root of
 the tree, named after the *namespace* rather than a tag value.
 
-`lang/` covers 72 languages. Each poster carries a proverb in the language, its English
+`lang/` covers 76 languages. Each poster carries a proverb in the language, its English
 gloss set quietly underneath, and the language's own name across a black band at the foot —
 the endonym in its own script, romanised at the left and named in English at the right:
 
-> Afrikaans, Amharic, Arabic, Armenian, Azerbaijani, Basque, Bengali, Bhojpuri, Bulgarian,
+> Afrikaans, Amharic, Arabic, Armenian, Azerbaijani, Bambara, Basque, Bengali, Bhojpuri, Bulgarian,
 > Burmese, Cantonese, Catalan, Chinese, Croatian, Czech, Danish, Dutch, English, Estonian,
 > Filipino, Finnish, French, Georgian, German, Greek, Gujarati, Hausa, Hebrew, Hindi,
 > Hungarian, Icelandic, Indonesian, Irish, Italian, Japanese, Javanese, Kannada, Kazakh,
 > Khmer, Korean, Latvian, Lithuanian, Maithili, Malay, Malayalam, Marathi, Nepali, Nigerian
 > Pidgin, Norwegian, Odia, Pashto, Persian, Polish, Portuguese, Punjabi, Romanian, Russian,
 > Serbian, Sindhi, Sinhala, Spanish, Sundanese, Swahili, Swedish, Tamil, Telugu, Thai,
-> Turkish, Ukrainian, Uzbek, Vietnamese, Yoruba
+> Tswana, Turkish, Ukrainian, Undetermined, Uzbek, Vietnamese, Wolof, Yoruba
 
 Arabic, Hebrew, Persian, Pashto, Sindhi and Urdu are set right to left.
 
-That is 72 images under 83 filenames. The eleven extra stems are below, each byte-identical
+Undetermined is the one exception to the proverb rule: ISO 639-2 `und` means no language
+could be identified, so there is nothing to quote. Its poster carries the code and a plain
+gloss instead.
+
+That is 76 images under 88 filenames. The twelve extra stems are below, each byte-identical
 to the poster it duplicates, because the name on the poster is not always the name Jellyfin
 gives the collection — whichever one lands, it gets the same artwork:
 
@@ -55,6 +59,7 @@ gives the collection — whichever one lands, it gets the same artwork:
 | Maithili | `maithili`, `mai` | see below |
 | Nigerian Pidgin | `nigerian_pidgin`, `pcm` | see below |
 | Urdu | `urdu` | a copy of `hindi` — see below |
+| Undetermined | `undetermined`, `und` | ISO 639-2 `und` has no two-letter code, so it may surface as the bare code |
 
 `bho`, `mai`, `pcm` and `fil` are bare ISO codes rather than names. A language with no
 two-letter code is skipped by the server's own `LoadCultures`, so `FindLanguageInfo` never
