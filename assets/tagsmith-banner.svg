@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1308 688" width="1308" height="688">
+  <!-- Landscape version of tagsmith.svg for the Plugins page tile and the catalogue card
+       (about 327:172). The name is drawn over the bottom-left of the tile by the dashboard,
+       so the mark sits centred and high, leaving that corner clear. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4FC3F7"/>
+      <stop offset="1" stop-color="#1565C0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="42%" r="55%">
+      <stop offset="0" stop-color="#1B3A5C" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#0B1622" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1308" height="688" fill="#0B1622"/>
+  <rect width="1308" height="688" fill="url(#glow)"/>
+  <!-- the tag from tagsmith.svg (viewBox 512), scaled to 0.95 and centred -->
+  <g transform="translate(654 292) scale(0.95) translate(-256 -256)">
+    <path d="M300 56h140a24 24 0 0 1 24 24v140a56 56 0 0 1-16.4 39.6L246 439.2a24 24 0 0 1-33.9 0L72.8 299.9a24 24 0 0 1 0-33.9L260.4 72.4A56 56 0 0 1 300 56z"
+          fill="url(#g)"/>
+    <circle cx="396" cy="124" r="34" fill="#0B1622"/>
+    <circle cx="396" cy="124" r="18" fill="#4FC3F7"/>
+  </g>
+</svg>

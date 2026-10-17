@@ -27,8 +27,8 @@ jobs:
       # Jellyfin compares versions with System.Version, where 1.0.0 != 1.0.0.0.
       # The release tag and zip stay on 3-part versions; .NET needs 4 parts internally, and
       # the manifest entry uses the same 4 parts. The dashboard asks the server for a
-      # plugin's icon by the version the assembly reports (0.2.3.0), and the server matches
-      # that against the manifest's version (it was 0.2.3), so a 3-part manifest entry made
+      # plugin's icon by the version the assembly reports (0.2.2.0), and the server matches
+      # that against the manifest's version (0.2.2), so a 3-part manifest entry made
       # every request 404 and the Plugins page showed a blank tile.
       - name: Resolve version
         id: v

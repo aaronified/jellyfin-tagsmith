@@ -1,7 +1,7 @@
 # Jellyfin 12 migration
 
-**Status: investigation, plus one shipped workaround (0.2.3): a client-side link rewrite,
-described under [Implemented](#implemented-link-rewrite-via-javascript-injector-023). The
+**Status: investigation, plus one shipped workaround (1.0.0): a client-side link rewrite,
+described under [Implemented](#implemented-link-rewrite-via-javascript-injector-100). The
 server-side causes below are unchanged, and nothing else here has been acted on.**
 
 Tagsmith targets 10.11.11 (`build.yaml` `targetAbi: 10.11.11.0`, `Jellyfin.Controller`
@@ -178,7 +178,7 @@ reasons about, and the reason members are written by path.
 An upgraded server looks fine because the rows already exist from 10.11. The exposure is
 **newly created collections, membership changes, and any rebuild from scratch**. Test D.
 
-## Implemented: link rewrite via JavaScript Injector (0.2.3)
+## Implemented: link rewrite via JavaScript Injector (1.0.0)
 
 This is not one of the numbered options below: it leaves the server, the library type and
 the data alone and fixes only where the tile points.
